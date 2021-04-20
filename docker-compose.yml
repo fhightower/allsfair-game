@@ -1,0 +1,24 @@
+version: '3.4'
+
+services:
+  _base:
+    &base
+    build:
+      dockerfile: Dockerfile
+      context: .
+    volumes:
+      - ./:/code
+
+  repl:
+    <<: *base
+    command: lein repl
+
+  # a fully loaded development environment to test new code
+  dev:
+    <<: *base
+    command: bash
+
+  # run tests
+  test:
+    <<: *base
+    command: lein test
