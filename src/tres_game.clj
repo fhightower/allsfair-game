@@ -1,8 +1,6 @@
 (ns tres-game)
 
-(use '[clojure.string :only (split)])
-
-(def empty-square {:owner nil :count nil})
+(use '[utils :only (empty-square process-move)])
 
 (def board {:a {:owner 1 :count 3} :b empty-square :c empty-square
             :d empty-square :e empty-square :f empty-square
@@ -10,8 +8,7 @@
 
 (defn get-moves []
   (println "Enter your move in the form <start><end><count> (e.g. \"ab3\"):")
-  (let [move (read-line)]
-    {:start (first move) :end (second move) :count (Integer. (second (split move #"[a-h]{2}")))}))
+  (process-move (read-line)))
 
 (defn update-board [board team-one-moves team-two-moves]
   (print board))
