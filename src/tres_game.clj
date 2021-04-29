@@ -6,13 +6,18 @@
             :d empty-square :e empty-square :f empty-square
             :g empty-square :h empty-square :i {:owner 2 :count 3}})
 
-(defn get-moves []
+(defn get-move []
   (println "Enter your move in the form <start><end><count> (e.g. \"ab3\"):")
   (process-move (read-line)))
+
+(defn get-moves []
+  (repeat 3 (get-move)))
 
 (defn update-board [board team-one-moves team-two-moves]
   (print board))
 
 (defn play [board]
-  (let [team-one-moves (repeat 3 (get-moves)) team-two-moves (repeat 3 get-moves)]
+  (let [team-one-moves (get-moves) team-two-moves (get-moves)]
     (update-board board team-one-moves team-two-moves)))
+
+;; (play board)
