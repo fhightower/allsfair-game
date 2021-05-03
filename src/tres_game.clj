@@ -11,10 +11,16 @@
   (process-move (read-line)))
 
 (defn get-moves []
-  (repeat 3 (get-move)))
+  (repeatedly 3 get-move))
+
+(defn make-move [board team-one-move team-two-move]
+  ())
 
 (defn update-board [board team-one-moves team-two-moves]
-  (print board))
+  (for [team-one-move team-one-moves
+        team-two-move team-two-moves
+        :let [board (make-move board team-one-move team-two-move)]]
+    board))
 
 (defn play [board]
   (let [team-one-moves (get-moves) team-two-moves (get-moves)]
