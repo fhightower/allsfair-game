@@ -18,21 +18,21 @@
     (= (get (get board (get move :start)) :owner) owner)
     (>= (get (get board (get move :start)) :count) (get move :count))))
 
-(defn make-move [board moves]
+(defn make-moves [board team-one-move team-two-move]
+  ())
+
+(defn update-board [board moves]
   (let [team-one-move (first moves)
         team-two-move (second moves)
         team-one-move-valid? (valid? board team-one-move 1)
         team-two-move-valid? (valid? board team-two-move 2)]
     (cond
-      (and team-one-move-valid? team-two-move-valid?) "a"
-      team-one-move-valid? "b"
-      team-two-move-valid? "c")))
-
-(defn update-board [board team-one-moves team-two-moves]
-  (reduce make-move board (partition 2 (interleave team-one-moves team-two-moves))))
+      (and team-one-move-valid? team-two-move-valid?) (make-moves board team-one-move team-two-move)
+      team-one-move-valid? (make-moves board team-one-move {})
+      team-two-move-valid? (make-moves board {} team-two-move))))
 
 (defn play [board]
   (let [team-one-moves (get-moves) team-two-moves (get-moves)]
-    (update-board board team-one-moves team-two-moves)))
+    (reduce make-moves board (partition 2 (interleave team-one-moves team-two-moves)))))
 
 ;; (play board)
