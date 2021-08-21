@@ -1,7 +1,9 @@
 (ns tres-game-test
   (:require [clojure.test :refer [deftest is testing]]
-            [tres-game :refer []]))
+            [tres-game :refer [update-start-square board]]))
 
-;; (deftest armstrong-number-0
-;;   (testing "Zero is an Armstrong number"
-;;     (is (armstrong? 0))))
+(def sample-move {:start "a" :end "b" :count 2})
+
+(deftest update-start-square-0
+  (testing "Update starting square is correct"
+    (is (update-start-square board sample-move) {})))
