@@ -1,6 +1,6 @@
 (ns tres-game)
 
-(use '[utils :only (process-move)])
+(use '[utils :only (process-move get-moves)])
 (use '[data :only (board)])
 
 (defn play [board]

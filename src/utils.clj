@@ -1,9 +1,7 @@
 (ns utils)
 
-(use '[clojure.string :refer (split)])
-
 (defn process-move [move]
-  {:start (first move) :end (second move) :count (Integer. (second (split move #"[a-h]{2}")))})
+  {:start (first move) :end (second move) :count (Integer. (apply str (nthrest move 2)))})
 
 (defn get-move []
   (println "Enter your move in the form <start><end><count> (e.g. \"ab3\"):")
