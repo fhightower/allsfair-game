@@ -1,4 +1,4 @@
-(ns tres-game)
+(ns game)
 
 (use '[utils :only (process-move get-moves)])
 (use '[data :only (board)])
