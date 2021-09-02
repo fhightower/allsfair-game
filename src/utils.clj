@@ -15,6 +15,17 @@
    (= (get (get board (get move :start)) :owner) owner)
    (>= (get (get board (get move :start)) :count) (get move :count))))
 
+(defn- get-teams-on-board [board]
+  (distinct (remove nil? (map #(:owner %) (vals board)))))
+
+(defn game-over?
+  "Determine whether or not the game is over. The game is over if one team no longer has pieces on the board."
+  [board]
+  (= (count (get-teams-on-board board)) 1))
+
+(defn get-winner [board]
+  (first (get-teams-on-board board)))
+
 ;; (defn update-start-square [board move]
 ;;   (let [square (get move :start)
 ;;         count (get move :count)]
