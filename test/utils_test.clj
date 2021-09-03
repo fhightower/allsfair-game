@@ -1,6 +1,6 @@
 (ns utils-test
   (:require [clojure.test :refer [deftest is testing]]
-            [utils :refer [process-move game-over? get-winner]]
+            [utils :refer [process-move game-over? get-winner make-move]]
             [data :refer [empty-square]]))
 
 (def board-with-winner {:a {:owner 1 :count 3} :b empty-square :c empty-square
@@ -10,6 +10,10 @@
 (def board-without-winner {:a {:owner 1 :count 3} :b empty-square :c empty-square
                         :d empty-square :e empty-square :f empty-square
                         :g empty-square :h empty-square :i {:owner 2 :count 3}})
+
+(def simple-board {:a {:owner 1 :count 3} :b empty-square :c empty-square})
+(def simple-move (process-move "ab3"))
+(def move-pair [simple-move simple-move])
 
 (deftest process-move-valid-1-digit-count
   (testing "process-move handles a count with 1 digit"
@@ -39,3 +43,7 @@
 (deftest get-winner-works
   (testing "get-winner returns correct team name when there is only one team left on the board"
     (is (= (get-winner board-with-winner) 1))))
+
+(deftest make-moves-simple
+  (testing "make-move works in simple case"
+    (is (= (make-move simple-board move-pair) {:a {:owner 1 :count 0} :b {:owner 1 :count 3} :c empty-square}))))
