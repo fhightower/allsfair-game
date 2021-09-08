@@ -10,11 +10,6 @@
 (defn get-moves []
   (repeatedly 3 get-move))
 
-(defn valid? [board move owner]
-  (and
-   (= (get (get board (get move :start)) :owner) owner)
-   (>= (get (get board (get move :start)) :count) (get move :count))))
-
 (defn- get-teams-on-board [board]
   (distinct (remove nil? (map #(:owner %) (vals board)))))
 
@@ -26,21 +21,32 @@
 (defn get-winner [board]
   (first (get-teams-on-board board)))
 
-;; (defn update-start-square [board move]
-;;   (let [square (get move :start)
-;;         count (get move :count)]
-;;     {:owner (get (get board square) :owner)
-;;      :count (- (get (get board square) :count) count)}))
+(defn update-start-square [board move]
+  (let [square (get move :start)
+        count (get move :count)]
+    {:owner (get (get board square) :owner)
+     :count (- (get (get board square) :count) count)}))
+
+(defn update-end-square [board move]
+  (let [square (get move :end)
+        count (get move :count)]
+    {:owner (get (get board square) :owner)
+     :count (+ (get (get board square) :count) count)}))
 
 ;; (defn make-moves [board team-one-move team-two-move]
 ;;   (cond
 ;;     (empty? team-one-move) (assoc board
 ;;                                   (get team-two-move :start) (update-start-square board team-two-move)
 ;;                                   (get team-two-move :end) {:owner
-;;                                                             (cond ()) :count (- (get (get team-two-move :start) :count) (get team-two-move :count))})
-;;     (empty? team-two-move)
+;;                                                             :count (- (get (get team-two-move :start) :count) (get team-two-move :count))})
+;;     (empty? team-two-move) ()
 ;;     ; todo: implement the line below
 ;;     :else ()))
+
+;; (defn valid? [board move owner]
+;;   (and
+;;    (= (get (get board (get move :start)) :owner) owner)
+;;    (>= (get (get board (get move :start)) :count) 1)))
 
 ;; (defn update-board [board moves]
 ;;   (let [team-one-move (first moves)
@@ -51,3 +57,11 @@
 ;;       (and team-one-move-valid? team-two-move-valid?) (make-moves board team-one-move team-two-move)
 ;;       team-one-move-valid? (make-moves board team-one-move {})
 ;;       team-two-move-valid? (make-moves board {} team-two-move))))
+
+;; (defn apply-move [board move]
+;;   )
+
+;; (defn make-moves [board move-pair]
+;;   (let [team-one-move (first move-pair)
+;;         team-two-move (second move-pair)]
+;;     ))
