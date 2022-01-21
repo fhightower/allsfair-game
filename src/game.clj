@@ -5,7 +5,7 @@
 
 (defn play [board]
   (loop [board board]
-    (if (game-over? board)
+    (if (some? (get-winner board))
       (println (str "Game over!" "Winner is" (get-winner board)))
       (let [team-one-moves (get-moves)
             team-two-moves (get-moves)]

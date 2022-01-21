@@ -13,13 +13,12 @@
 (defn- get-teams-on-board [board]
   (distinct (remove nil? (map #(:owner %) (vals board)))))
 
-(defn game-over?
-  "Determine whether or not the game is over. The game is over if one team no longer has pieces on the board."
-  [board]
-  (= (count (get-teams-on-board board)) 1))
-
 (defn get-winner [board]
-  (first (get-teams-on-board board)))
+  (let [teams (get-teams-on-board board)
+        game-over (= (count teams) 1)]
+    (if (true? game-over)
+      (first teams)
+      nil)))
 
 (defn update-start-square [board move]
   (let [square (get move :start)
