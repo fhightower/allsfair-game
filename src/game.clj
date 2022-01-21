@@ -1,6 +1,6 @@
 (ns game)
 
-(use '[utils :only (get-moves game-over? get-winner make-moves)])
+(use '[utils :only (get-moves get-winner make-moves)])
 (use '[data :only (board)])
 
 (defn play [board]
