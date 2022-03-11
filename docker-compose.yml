@@ -8,16 +8,16 @@ services:
       context: .
     volumes:
       - ./:/code
+    ports:
+      - 9000:9000
 
-  # repl:
-  #   <<: *base
-  #   command: lein repl
+  repl:
+    <<: *base
+    command: 'clj -M --main cljs.main -w src/squarular/ --repl-opts "{:launch-browser false}" -c squarular.core -r'
 
   dev:
     <<: *base
     command: bash
-    ports:
-      - 9000:9000
 
   # test:
     # <<: *base
