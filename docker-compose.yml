@@ -13,10 +13,11 @@ services:
     <<: *base
     command: lein repl
 
-  # a fully loaded development environment to test new code
   dev:
     <<: *base
     command: bash
+    ports:
+      - 9000:9000
 
   # run tests
   test:
