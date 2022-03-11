@@ -9,9 +9,9 @@ services:
     volumes:
       - ./:/code
 
-  repl:
-    <<: *base
-    command: lein repl
+  # repl:
+  #   <<: *base
+  #   command: lein repl
 
   dev:
     <<: *base
@@ -19,7 +19,6 @@ services:
     ports:
       - 9000:9000
 
-  # run tests
-  test:
-    <<: *base
-    command: lein test
+  # test:
+    # <<: *base
+    # command: lein test
