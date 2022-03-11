@@ -1,6 +1,6 @@
-# Tres Game
+# Squarular
 
-One of the fairest games ever invented.
+Squarular (*Square-You-Larr*) is a fair, concurrently played game.
 
 ## Development
 
