@@ -1,4 +1,4 @@
-(ns data)
+(ns squarular.data)
 
 (def empty-square {:owner nil :count nil})
 
