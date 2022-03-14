@@ -13,7 +13,7 @@ services:
 
   repl:
     <<: *base
-    command: 'clj -M --main cljs.main -w src/squarular/ --repl-opts "{:launch-browser false}" -c squarular.core -r'
+    command: 'rm -rf .cpcache/ && clj -M --main cljs.main -w src/squarular/ --repl-opts "{:launch-browser false}" -c squarular.core -r'
 
   dev:
     <<: *base
