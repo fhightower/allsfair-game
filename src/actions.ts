@@ -1,6 +1,6 @@
-// Port of actions.py. The ML bot is not shipped in v1, but its seam is kept:
-// the __ML_BOT__ secret convention, the ML guards in join/submit, and the
-// auto-submission hook point in submitMove (see the design spec).
+// Game API actions. Bot games use the __ML_BOT__ secret convention: the bot is
+// seated as player 2 at create time, guarded in join/submit, and its trio is
+// auto-submitted from submitMove (see docs/superpowers/specs for the design).
 import { planBotTrio } from "./bot";
 import { Board, Move } from "./engine";
 import { InvalidSecret } from "./exceptions";

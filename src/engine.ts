@@ -1,6 +1,7 @@
-// Port of allsfair/models.py. The Python engine is the source of truth for
-// game rules; test/parity.test.ts replays Python-generated fixtures to keep
-// this port byte-identical (including toHtmlTable output).
+// Canonical definition of the game rules. Originally a port of allsfair/models.py
+// from the now-archived allsfair-python repo; this file is the source of truth.
+// test/parity.test.ts replays golden fixtures captured from that engine to catch
+// unintended behavior changes (including toHtmlTable output).
 import { ImproperlyFormattedMove, InvalidMove } from "./exceptions";
 
 export const TEAM_1 = 1;

@@ -1,12 +1,15 @@
-// Trio-level candidate-search bot. Port of the measured Python prototype
-// (allsfair repo, scripts/search_bot_eval.py): 76% wins vs heuristic,
-// 94% vs the old hybrid Q-bot. Weights and parameters are measured values —
-// re-run the Python eval harness before changing them.
+// Trio-level candidate-search bot. Started as a port of a Python prototype
+// (scripts/search_bot_eval.py in the archived allsfair-python repo, measured
+// 76% wins vs heuristic and 94% vs the old hybrid Q-bot) but is now the only
+// implementation: this bot breaks score ties on the real move string rather
+// than the mirrored action key, and its RNG stream differs, so it never
+// matched the prototype move-for-move.
 //
-// Known deviation from the prototype: score ties break on the real move
-// string here vs the mirrored action key in Python, and the RNG streams
-// differ — so move-for-move trajectories diverge. Strength is verified
-// directly by test/bot.strength.test.ts, not by cross-language parity.
+// Weights and search parameters below are inherited from those measurements.
+// test/bot.strength.test.ts is the authority on how strong this bot actually
+// is (>=60% vs heuristic, >=90% vs random over 50 games) — re-run it after any
+// change here. To tune rather than just gate, build a W/L/D sweep on top of
+// its playGame helper; there is no external eval harness anymore.
 import { Board, Move, MovePair, TEAM_1, TEAM_2 } from "./engine";
 import { choice, makeRng } from "./rng";
 
