@@ -137,6 +137,19 @@ describe("history and html", () => {
     expect(html).toContain("<style>");
   });
 
+  it("renders history newest-first with the starting board last", () => {
+    const board = new Board();
+    board.applyMovePair(pair("a1b", "i1h"));
+    board.applyMovePair(pair("a1d", "i1f"));
+    const html = board.toHtmlTable();
+    const newest = html.indexOf("Moves: P1 a1d, P2 i1f");
+    const oldest = html.indexOf("Moves: P1 a1b, P2 i1h");
+    const start = html.indexOf("Starting board");
+    expect(newest).toBeGreaterThan(-1);
+    expect(newest).toBeLessThan(oldest);
+    expect(oldest).toBeLessThan(start);
+  });
+
   it("shows the winner banner", () => {
     const board = new Board();
     board.state.i.owner = 1;

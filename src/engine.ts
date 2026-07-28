@@ -162,13 +162,20 @@ export class Board {
     return s;
   }
 
+  /**
+   * Newest round first, starting board last. `history` is already stored
+   * newest-first, so this walks it as-is: the log reads backwards from the
+   * live board above it instead of making the reader scroll to find the
+   * latest round.
+   */
   private historyToHtml(): string {
-    let s = this.stateToHtmlTable(this.startingState);
-    s += "<div class='move-pair'>Starting board</div><br>";
-    for (const entry of [...this.history].reverse()) {
+    let s = "";
+    for (const entry of this.history) {
       s += this.stateToHtmlTable(entry.state);
       s += `<div class='move-pair'>Moves: P1 ${entry.team1MoveStr}, P2 ${entry.team2MoveStr}</div><br>`;
     }
+    s += this.stateToHtmlTable(this.startingState);
+    s += "<div class='move-pair'>Starting board</div><br>";
     return s;
   }
 
