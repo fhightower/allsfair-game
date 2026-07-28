@@ -15,14 +15,15 @@ moves.
 
 ## Task list
 
-`docs/superpowers/plans/2026-07-28-bot-strength.md` is the real plan: the three
-reproduced defects, the measured baseline numbers, and a numbered "Remaining
-steps" list. Read it in full and work those steps in order.
+`docs/superpowers/plans/2026-07-28-bot-strength.md` is the real plan: the
+defects, what fixed them, the measured results, and a "Remaining" list. Read it
+in full and work that list.
 
-Some of them may already be done — the session that wrote it kept going
-afterwards. Check `git log --oneline main..bot-improvements` and the actual code
-before starting any step; trust the code over the plan's status line, and update
-the plan as you go.
+The bot changes have landed and are measured (70% head-to-head against the
+pre-tuning bot; 99% against the human line that beat it). What is left is
+finishing the docs and opening the PR. Check `git log --oneline
+main..bot-improvements` and the code before starting any step; trust the code
+over the plan's status line, and update the plan as you go.
 
 ## Setup
 

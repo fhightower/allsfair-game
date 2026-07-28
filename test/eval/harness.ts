@@ -5,8 +5,13 @@
 // `test/eval/bot-baseline.ts` is a frozen copy of the pre-tuning bot; keep it
 // around as the A/B opponent so any change to src/bot.ts can be measured
 // head-to-head instead of only against weak scripted opponents.
-import { legalActions, PASS_MOVE, planTrio, sampleTrio } from "../../src/bot";
-import { planTrio as planTrioBaseline } from "./bot-baseline";
+import { planTrio } from "../../src/bot";
+import {
+  legalActions,
+  PASS_MOVE,
+  planTrio as planTrioBaseline,
+  sampleTrio as sampleTrioBaseline,
+} from "./bot-baseline";
 import { Board, Move, MovePair } from "../../src/engine";
 import { choice, makeRng } from "../../src/rng";
 
@@ -25,6 +30,9 @@ export interface Tally {
   losses: number;
   draws: number;
   games: number;
+  /** Wins split by which seat the bot under test occupied. */
+  winsAsP1: number;
+  winsAsP2: number;
 }
 
 /** Returns the winning team (1 or 2), or 0 for a draw at MAX_ROUNDS. */
@@ -54,16 +62,27 @@ export function sweep(
   botUnderTest: Planner,
   games: number
 ): Tally {
-  const tally: Tally = { wins: 0, losses: 0, draws: 0, games: games * 2 };
+  const tally: Tally = {
+    wins: 0,
+    losses: 0,
+    draws: 0,
+    games: games * 2,
+    winsAsP1: 0,
+    winsAsP2: 0,
+  };
   for (let g = 0; g < games; g++) {
     const asP2 = playGame(opponent, botUnderTest, `eval-${g}`);
-    if (asP2 === 2) tally.wins++;
-    else if (asP2 === 1) tally.losses++;
+    if (asP2 === 2) {
+      tally.wins++;
+      tally.winsAsP2++;
+    } else if (asP2 === 1) tally.losses++;
     else tally.draws++;
 
     const asP1 = playGame(botUnderTest, opponent, `eval-swap-${g}`);
-    if (asP1 === 1) tally.wins++;
-    else if (asP1 === 2) tally.losses++;
+    if (asP1 === 1) {
+      tally.wins++;
+      tally.winsAsP1++;
+    } else if (asP1 === 2) tally.losses++;
     else tally.draws++;
   }
   return tally;
@@ -71,7 +90,11 @@ export function sweep(
 
 export function formatTally(name: string, t: Tally): string {
   const pct = Math.round((t.wins / t.games) * 100);
-  return `${name.padEnd(20)} W:${t.wins} L:${t.losses} D:${t.draws}  (${pct}%)`;
+  const half = t.games / 2;
+  return (
+    `${name.padEnd(20)} W:${t.wins} L:${t.losses} D:${t.draws}  (${pct}%)` +
+    `  [as P1 ${t.winsAsP1}/${half}, as P2 ${t.winsAsP2}/${half}]`
+  );
 }
 
 // --- opponents -------------------------------------------------------------
@@ -84,9 +107,14 @@ export const searchBot: Planner = (b, player, seed) =>
 export const baselineBot: Planner = (b, player, seed) =>
   planTrioBaseline(b, player, makeRng(seed));
 
-/** Greedy argmax of the action heuristic — the old strength-gate opponent. */
+/**
+ * Greedy argmax of the action heuristic — the old strength-gate opponent.
+ * Deliberately built on the *baseline* scorer: if it used the live one, tuning
+ * `scoredActions` would move the opponent too and the sweep would measure
+ * nothing.
+ */
 export const heuristicBot: Planner = (b, player, seed) =>
-  sampleTrio(b, player, makeRng(seed), 1);
+  sampleTrioBaseline(b, player, makeRng(seed), 1);
 
 export const randomBot: Planner = (b, player, seed) => {
   const rand = makeRng(seed);
@@ -100,6 +128,49 @@ export const randomBot: Planner = (b, player, seed) => {
     }
     const a = choice(actions, rand);
     const s = `${a.start}${a.troops}${a.end}`;
+    plan.applyPlannedMove(new Move(s), player);
+    moves.push(s);
+  }
+  return moves;
+};
+
+// Distance to the enemy home, kept local so opponents never drift with
+// src/bot.ts.
+const DIST_TO_ENEMY_HOME: Record<number, Record<string, number>> = {
+  1: { a: 4, b: 3, c: 2, d: 3, e: 2, f: 1, g: 2, h: 1, i: 0 },
+  2: { a: 0, b: 1, c: 2, d: 1, e: 2, f: 3, g: 2, h: 3, i: 4 },
+};
+
+/**
+ * Deterministic beeline at the enemy home with the biggest stack — the shape
+ * of the human play that beat the shipped bot. Every move, the largest owned
+ * stack steps one square closer.
+ */
+export const rushBot: Planner = (b, player) => {
+  const dist = DIST_TO_ENEMY_HOME[player];
+  const plan = b.clone();
+  const moves: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const owned = plan.populatedSquaresOwned(player);
+    if (owned.length === 0) {
+      moves.push(PASS_MOVE[player]);
+      continue;
+    }
+    let from = owned[0];
+    for (const square of owned) {
+      if (
+        plan.state[square].troopCount > plan.state[from].troopCount ||
+        (plan.state[square].troopCount === plan.state[from].troopCount &&
+          dist[square] < dist[from])
+      ) {
+        from = square;
+      }
+    }
+    let to = plan.state[from].neighbors[0];
+    for (const neighbor of plan.state[from].neighbors) {
+      if (dist[neighbor] < dist[to]) to = neighbor;
+    }
+    const s = `${from}${plan.state[from].troopCount}${to}`;
     plan.applyPlannedMove(new Move(s), player);
     moves.push(s);
   }
@@ -143,6 +214,23 @@ export function makeStacker(buildRounds: number): Planner {
       moves.push(s);
     }
     return moves;
+  };
+}
+
+/**
+ * The line that actually beat the shipped bot, in three phases: trade pieces
+ * off with the greedy heuristic (against a bot that mirrors, equal-count
+ * collisions annihilate both sides), then sit at home banking restock, then
+ * march the resulting stack at the enemy home. A bot that cannot hold position
+ * loses the banking phase outright.
+ */
+export function makeHumanLike(tradeRounds: number, bankRounds: number): Planner {
+  return (b, player, seed, round) => {
+    if (round < tradeRounds) return heuristicBot(b, player, seed, round);
+    if (round < tradeRounds + bankRounds) {
+      return [PASS_MOVE[player], PASS_MOVE[player], PASS_MOVE[player]];
+    }
+    return rushBot(b, player, seed, round);
   };
 }
 

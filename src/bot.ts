@@ -13,13 +13,29 @@
 import { Board, Move, MovePair, TEAM_1, TEAM_2 } from "./engine";
 import { choice, makeRng } from "./rng";
 
-export const N_CANDIDATES = 16;
+export const N_CANDIDATES = 40;
 export const K_OPPONENT = 6;
+// Second, wider sampling width for candidate generation (see planTrio).
+export const WIDE_TOP_N = 8;
 export const MIN_WEIGHT = 0.25;
 export const MAX_TROOPS_PER_ACTION = 8;
 const MOVES_PER_ROUND = 3;
 
+// How hard the action scorer pulls toward home defense. Multiplies the home
+// deficit (threat the garrison cannot absorb), so it is inert on a quiet board
+// and only outweighs the ~1.65 of a routine advance once a real threat exists.
+export const DEFEND_WEIGHT = 0.9;
+// A hold is a wasted move on a quiet board; this keeps it out of the sampling
+// pool until the deficit term above carries it.
+export const HOLD_BASE = -0.1;
+// Value of one square of restock income. Each owned square pays one troop per
+// round for the rest of the game, so it is worth several rounds of material
+// (weighted 3 per troop) — not the 0 the evaluation used to give an empty
+// square it owned.
+export const INCOME_WEIGHT = 4;
+
 export const PASS_MOVE: Record<number, string> = { 1: "a0b", 2: "i0h" };
+export const HOME_SQUARE: Record<number, string> = { 1: "a", 2: "i" };
 
 // BFS distances to the ENEMY home on the fixed 9-node board
 // (test/bot.test.ts asserts these equal a BFS over startingBoardState()).
@@ -57,6 +73,48 @@ export function legalActions(board: Board, player: number): CandidateAction[] {
   return actions;
 }
 
+// Weight per square of distance from our home. The board is 4 squares across
+// and a round is 3 moves, so a stack 3 away can reach home before the bot gets
+// to plan again — the old distance-2 horizon simply could not see the stack
+// that killed it.
+const THREAT_BY_DISTANCE: Record<number, number> = {
+  0: 2,
+  1: 1,
+  2: 0.6,
+  3: 0.3,
+};
+
+/**
+ * Enemy pressure on `player`'s home: opposing troops close enough to reach it
+ * within one round, weighted by how soon they arrive. Troops already standing
+ * on the home count double — the square is lost and has to be taken back.
+ */
+export function homeThreat(board: Board, player: number): number {
+  const opponent = player === 1 ? TEAM_2 : TEAM_1;
+  // The opponent's distance-to-enemy-home IS their distance to our home.
+  const distToOurHome = DIST_TO_ENEMY_HOME[opponent];
+  let threat = 0;
+  for (const [name, node] of Object.entries(board.state)) {
+    if (node.owner !== opponent || node.troopCount <= 0) continue;
+    const weight = THREAT_BY_DISTANCE[distToOurHome[name]];
+    if (weight) threat += node.troopCount * weight;
+  }
+  return threat;
+}
+
+/** Threat the home garrison cannot absorb. 0 on a quiet board. */
+export function homeDeficit(board: Board, player: number): number {
+  const home = board.state[HOME_SQUARE[player]];
+  const garrison = home.owner === player ? home.troopCount : 0;
+  return Math.max(0, homeThreat(board, player) - garrison);
+}
+
+/** The no-op move, as a candidate action so a trio slot can decline to move. */
+export function holdAction(player: number): CandidateAction {
+  const pass = PASS_MOVE[player];
+  return { start: pass[0], troops: 0, end: pass[2] };
+}
+
 export function scoredActions(
   board: Board,
   player: number
@@ -64,6 +122,8 @@ export function scoredActions(
   const opponent = player === 1 ? TEAM_2 : TEAM_1;
   const dist = DIST_TO_ENEMY_HOME[player];
   const enemyHome = player === 1 ? "i" : "a";
+  const home = HOME_SQUARE[player];
+  const deficit = homeDeficit(board, player);
 
   const scored = legalActions(board, player).map((action) => {
     const destination = board.state[action.end];
@@ -76,7 +136,25 @@ export function scoredActions(
       score += 0.45;
     }
     if (action.end === enemyHome) score += 1.5;
+    // Defense. Both terms are scaled by the deficit, so a bot that is not
+    // under threat scores exactly as it did before these were added.
+    if (deficit > 0) {
+      if (action.start === home) {
+        score -= Math.min(action.troops, deficit) * DEFEND_WEIGHT;
+      }
+      if (action.end === home) {
+        score += Math.min(action.troops, deficit) * DEFEND_WEIGHT;
+      }
+    }
     return { score, action };
+  });
+
+  // Holding is what lets the bot bank restock troops instead of bleeding its
+  // garrison into the middle every round. Without it every slot in the trio
+  // must push troops somewhere.
+  scored.push({
+    score: HOLD_BASE + deficit * DEFEND_WEIGHT * 0.6,
+    action: holdAction(player),
   });
 
   scored.sort(
@@ -111,6 +189,41 @@ export function sampleTrio(
   return moves;
 }
 
+/**
+ * Deterministic beeline: each move, send the biggest stack one square closer to
+ * the enemy home. The heuristic sampler never produces this — it spreads troops
+ * — so without it in the opponent model the bot never has to answer the one
+ * plan that actually kills it: a single stack marching on its home.
+ */
+export function rushTrio(board: Board, player: number): string[] {
+  const dist = DIST_TO_ENEMY_HOME[player];
+  const plan = board.clone();
+  const moves: string[] = [];
+  for (let i = 0; i < MOVES_PER_ROUND; i++) {
+    const owned = plan.populatedSquaresOwned(player);
+    if (owned.length === 0) {
+      moves.push(PASS_MOVE[player]);
+      continue;
+    }
+    let from = owned[0];
+    for (const square of owned) {
+      const better =
+        plan.state[square].troopCount > plan.state[from].troopCount ||
+        (plan.state[square].troopCount === plan.state[from].troopCount &&
+          dist[square] < dist[from]);
+      if (better) from = square;
+    }
+    let to = plan.state[from].neighbors[0];
+    for (const neighbor of plan.state[from].neighbors) {
+      if (dist[neighbor] < dist[to]) to = neighbor;
+    }
+    const moveString = `${from}${plan.state[from].troopCount}${to}`;
+    plan.applyPlannedMove(new Move(moveString), player);
+    moves.push(moveString);
+  }
+  return moves;
+}
+
 export function evaluate(board: Board, me: number): number {
   const them = me === 1 ? TEAM_2 : TEAM_1;
   const winner = board.winner;
@@ -125,33 +238,52 @@ export function evaluate(board: Board, me: number): number {
   let material = 0;
   let squares = 0;
   let progress = 0;
-  let homeThreat = 0;
+  let ownedSquares = 0;
+  let theirOwnedSquares = 0;
 
   for (const [name, node] of Object.entries(board.state)) {
-    if (node.owner === me && node.troopCount > 0) {
-      material += node.troopCount;
-      squares += 1;
-      progress += node.troopCount * (4 - myDist[name]);
-    } else if (node.owner === them && node.troopCount > 0) {
-      material -= node.troopCount;
-      squares -= 1;
-      progress -= node.troopCount * (4 - theirDist[name]);
-      // their distance-to-enemy-home IS their distance to MY home
-      const distToMyHome = theirDist[name];
-      if (distToMyHome <= 2) {
-        homeThreat += node.troopCount * (3 - distToMyHome);
+    if (node.owner === me) {
+      // Ownership is sticky: a square keeps its owner after the troops leave,
+      // and restock pays per square owned, empty or not. That income is the
+      // whole economy of the game, so it is counted separately from the
+      // populated-square term below.
+      ownedSquares += 1;
+      if (node.troopCount > 0) {
+        material += node.troopCount;
+        squares += 1;
+        progress += node.troopCount * (4 - myDist[name]);
+      }
+    } else if (node.owner === them) {
+      theirOwnedSquares += 1;
+      if (node.troopCount > 0) {
+        material -= node.troopCount;
+        squares -= 1;
+        progress -= node.troopCount * (4 - theirDist[name]);
       }
     }
   }
 
   const myHomeNode = board.state[myHome];
+  const theirHomeNode = board.state[theirHome];
   const garrison = myHomeNode.owner === me ? myHomeNode.troopCount : 0;
-  if (myHomeNode.owner === them) homeThreat += 50;
-  const exposed = Math.max(0, homeThreat * 2 - garrison);
-  const captureProgress = board.state[theirHome].owner === me ? 6 : 0;
+  // One definition of threat, shared with the action scorer, so the search and
+  // the candidate generator cannot disagree about what counts as danger.
+  let threat = homeThreat(board, me) * 2;
+  if (myHomeNode.owner === them) threat += 50;
+  const exposed = Math.max(0, threat * 2 - garrison);
+  const captureProgress = theirHomeNode.owner === me ? 6 : 0;
+  // Restock only pays out to a home you still hold.
+  const income =
+    (myHomeNode.owner === me ? ownedSquares : 0) -
+    (theirHomeNode.owner === them ? theirOwnedSquares : 0);
 
   return (
-    material * 3 + squares * 2 + progress * 0.6 - exposed * 1.5 + captureProgress
+    material * 3 +
+    squares * 2 +
+    progress * 0.6 -
+    exposed * 1.5 +
+    captureProgress +
+    income * INCOME_WEIGHT
   );
 }
 
@@ -179,9 +311,16 @@ export function planTrio(
 ): string[] {
   const them = me === 1 ? TEAM_2 : TEAM_1;
 
-  const candidates: string[][] = [sampleTrio(board, me, rand, 1)];
-  for (let i = 1; i < N_CANDIDATES; i++) {
-    candidates.push(sampleTrio(board, me, rand, 3));
+  // Diversity matters more than count here: every trio drawn from the top of
+  // the same greedy scorer gives the search a pool of near-identical plans, and
+  // then no evaluation weight can change the answer. Mix the greedy argmax, two
+  // widths of sampling, and the deterministic rush.
+  const candidates: string[][] = [
+    sampleTrio(board, me, rand, 1),
+    rushTrio(board, me),
+  ];
+  for (let i = candidates.length; i < N_CANDIDATES; i++) {
+    candidates.push(sampleTrio(board, me, rand, i % 2 === 0 ? 3 : WIDE_TOP_N));
   }
   const seen = new Set<string>();
   const unique = candidates.filter((trio) => {
@@ -191,8 +330,11 @@ export function planTrio(
     return true;
   });
 
-  const oppTrios: string[][] = [sampleTrio(board, them, rand, 1)];
-  for (let i = 1; i < K_OPPONENT; i++) {
+  const oppTrios: string[][] = [
+    sampleTrio(board, them, rand, 1),
+    rushTrio(board, them),
+  ];
+  for (let i = oppTrios.length; i < K_OPPONENT; i++) {
     oppTrios.push(sampleTrio(board, them, rand, 3));
   }
 

@@ -1,5 +1,12 @@
 # Allsfair Search Bot — Design
 
+> **Stale.** This describes the bot as first shipped. The action space,
+> candidate generation, and evaluation terms have since changed, and the
+> "sub-millisecond" claim in the compute note was never true (that bot took
+> 13 ms per turn). See `docs/superpowers/plans/2026-07-28-bot-strength.md` for
+> what the bot does now and which weights are actually load-bearing. Kept for
+> the measurement history and the server-wiring design, which still hold.
+
 **Date:** 2026-07-10
 **Status:** Approved pending review
 **Goal:** Ship play-against-bot in the Cloudflare Worker: a non-LLM, asset-free bot that runs locally and in the cloud and is materially stronger than the retired GCP bot.

@@ -2,13 +2,32 @@ import { describe, expect, it } from "vitest";
 import {
   DIST_TO_ENEMY_HOME,
   evaluate,
+  holdAction,
+  homeDeficit,
+  homeThreat,
   legalActions,
   planBotTrio,
+  planTrio,
+  rushTrio,
   sampleTrio,
   scoredActions,
 } from "../src/bot";
-import { Board, Move, startingBoardState } from "../src/engine";
+import { Board, Move, MovePair, startingBoardState } from "../src/engine";
 import { makeRng } from "../src/rng";
+
+/** Board with only the listed squares occupied: square -> [owner, troops]. */
+function position(spec: Record<string, [number, number]>): Board {
+  const board = new Board();
+  for (const node of Object.values(board.state)) {
+    node.owner = 0;
+    node.troopCount = 0;
+  }
+  for (const [square, [owner, troops]] of Object.entries(spec)) {
+    board.state[square].owner = owner;
+    board.state[square].troopCount = troops;
+  }
+  return board;
+}
 
 function bfs(from: string): Record<string, number> {
   const graph = startingBoardState();
@@ -86,6 +105,90 @@ describe("sampleTrio", () => {
   });
 });
 
+describe("home threat", () => {
+  it("is zero when no enemy is within reach of home", () => {
+    expect(homeThreat(position({ a: [1, 3], i: [2, 3] }), 2)).toBe(0);
+  });
+
+  it("counts enemies up to a full round's march away", () => {
+    // d is 3 squares from i — reachable inside one 3-move round, which the
+    // distance-2 horizon this replaced could not see.
+    expect(homeThreat(position({ d: [1, 6], i: [2, 4] }), 2)).toBeGreaterThan(0);
+  });
+
+  it("weighs nearer enemies more heavily", () => {
+    const near = homeThreat(position({ h: [1, 4], i: [2, 1] }), 2);
+    const far = homeThreat(position({ e: [1, 4], i: [2, 1] }), 2);
+    expect(near).toBeGreaterThan(far);
+  });
+
+  it("counts an occupied home double", () => {
+    const occupied = position({ i: [1, 3] });
+    expect(homeThreat(occupied, 2)).toBe(6);
+  });
+
+  it("deficit is what the garrison cannot absorb", () => {
+    expect(homeDeficit(position({ h: [1, 10], i: [2, 2] }), 2)).toBe(8);
+    expect(homeDeficit(position({ h: [1, 2], i: [2, 10] }), 2)).toBe(0);
+  });
+});
+
+describe("hold action", () => {
+  it("is a legal no-op move for either player", () => {
+    for (const player of [1, 2]) {
+      const action = holdAction(player);
+      expect(action.troops).toBe(0);
+      expect(() => new Move(`${action.start}0${action.end}`)).not.toThrow();
+    }
+  });
+
+  it("leaves the board untouched when both players hold", () => {
+    const board = new Board();
+    const before = JSON.stringify(board.state);
+    board.applyMovePair(new MovePair(new Move("a0b"), new Move("i0h")));
+    expect(JSON.stringify(board.state)).toBe(before);
+  });
+
+  it("is offered as a candidate so a trio slot can decline to move", () => {
+    const actions = scoredActions(new Board(), 2).map((s) => s.action);
+    expect(actions.some((a) => a.troops === 0)).toBe(true);
+  });
+
+  it("outranks emptying a home that is under real threat", () => {
+    // Bot home i holds 2 against a 10-stack next door: spending the garrison
+    // on anything is worse than keeping it.
+    const top = scoredActions(position({ h: [1, 10], i: [2, 2] }), 2)[0];
+    expect(top.action.troops).toBe(0);
+  });
+
+  it("stays out of the pool on a quiet board", () => {
+    const top3 = scoredActions(new Board(), 2).slice(0, 3);
+    expect(top3.every((s) => s.action.troops > 0)).toBe(true);
+  });
+});
+
+describe("rushTrio", () => {
+  it("walks the biggest stack one square closer each move", () => {
+    const trio = rushTrio(position({ a: [1, 9], i: [2, 3] }), 1);
+    const dist = DIST_TO_ENEMY_HOME[1];
+    for (const [i, moveStr] of trio.entries()) {
+      const move = new Move(moveStr);
+      expect(move.troopCount).toBe(9); // the whole stack, never split
+      expect(dist[move.end]).toBe(dist[move.start] - 1);
+      if (i > 0) expect(move.start).toBe(new Move(trio[i - 1]).end);
+    }
+  });
+
+  it("passes when there is nothing to move", () => {
+    expect(rushTrio(position({ a: [1, 3] }), 2)).toEqual(["i0h", "i0h", "i0h"]);
+  });
+
+  it("is deterministic", () => {
+    const board = position({ a: [1, 4], d: [1, 2], i: [2, 5] });
+    expect(rushTrio(board, 1)).toEqual(rushTrio(board, 1));
+  });
+});
+
 describe("evaluate", () => {
   it("returns +/-1e6 on win/loss", () => {
     const board = new Board();
@@ -105,6 +208,33 @@ describe("evaluate", () => {
     const ahead = new Board();
     ahead.state.h = { ...ahead.state.h, owner: 2, troopCount: 2 }; // bot advanced
     expect(evaluate(ahead, 2)).toBeGreaterThan(evaluate(new Board(), 2));
+  });
+
+  it("values an owned square the troops have already left", () => {
+    // Restock pays per square owned, empty or not, so a claimed-then-vacated
+    // square is income — it used to score exactly the same as neutral ground.
+    const claimed = position({ i: [2, 3], h: [2, 0], a: [1, 3] });
+    const neutral = position({ i: [2, 3], a: [1, 3] });
+    expect(evaluate(claimed, 2)).toBeGreaterThan(evaluate(neutral, 2));
+  });
+
+  it("does not pay income for a home it no longer holds", () => {
+    const held = position({ i: [2, 1], h: [2, 0], a: [1, 3] });
+    const lost = position({ i: [1, 1], h: [2, 0], a: [1, 3] });
+    expect(evaluate(lost, 2)).toBeLessThan(evaluate(held, 2));
+  });
+});
+
+describe("planTrio", () => {
+  it("keeps a garrison home instead of marching past a threat", () => {
+    // Enemy 8-stack one square from the bot home, which holds 6. The plan has
+    // to leave something behind or reinforce; emptying the home loses it.
+    const board = position({ f: [1, 8], i: [2, 6], h: [2, 3], a: [1, 1] });
+    const trio = planTrio(board, 2, makeRng("garrison"));
+    const sim = board.clone();
+    for (const move of trio) sim.applyPlannedMove(new Move(move), 2);
+    expect(sim.state.i.owner).toBe(2);
+    expect(sim.state.i.troopCount).toBeGreaterThan(0);
   });
 });
 
