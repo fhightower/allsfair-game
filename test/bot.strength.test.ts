@@ -29,7 +29,7 @@ describe("bot strength gates", () => {
 
   it("beats the pre-tuning bot", { timeout: 120_000 }, () => {
     const tally = sweep(baselineBot, searchBot, GAMES);
-    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.6); // measured 70%
+    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.75); // measured 87%
   });
 
   // The line a human used to beat the shipped bot: trade pieces off, bank

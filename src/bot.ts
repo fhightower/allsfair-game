@@ -13,8 +13,8 @@
 import { Board, Move, MovePair, TEAM_1, TEAM_2 } from "./engine";
 import { choice, makeRng } from "./rng";
 
-export const N_CANDIDATES = 40;
-export const K_OPPONENT = 6;
+export const N_CANDIDATES = 64;
+export const K_OPPONENT = 16;
 // Second, wider sampling width for candidate generation (see planTrio).
 export const WIDE_TOP_N = 8;
 export const MIN_WEIGHT = 0.25;
