@@ -1,6 +1,6 @@
-// Strength gates. These are floors with margin, not the measured numbers —
-// see docs/superpowers/plans/2026-07-28-bot-strength.md for the full sweep and
-// test/eval/sweep.test.ts to re-measure after a change.
+// Strength gates. These are floors with margin, not the measured numbers; the
+// measured value is in a comment on each. To re-measure after a change, run the
+// full sweep in test/eval/sweep.test.ts.
 //
 // Every matchup is played from both seats, so a gate cannot be passed by an
 // artifact of which home square the bot starts on.

@@ -34,11 +34,10 @@ bot (`src/bot.ts`) as player 2. Each round it generates candidate trios, plays
 each against a set of guessed opponent trios using the real engine, and keeps
 the one with the best worst-case-weighted outcome.
 
-`docs/superpowers/plans/2026-07-28-bot-strength.md` is the current account of
-how it plays and why the weights are what they are — including which of them
-are measured and which are judgement. The original design spec
-(`docs/superpowers/specs/2026-07-10-search-bot-design.md`) describes the first
-version and is stale in its details.
+The constants at the top of `src/bot.ts` carry their own notes on what is
+measured and what is a judgement call — the search sizes were swept, the
+action-scorer weights were swept and turned out not to matter, and the
+defensive terms are kept on judgement rather than on any win-rate gain.
 
 `test/bot.strength.test.ts` gates strength against random, greedy-heuristic,
 pre-tuning, and human-style opponents, from both seats. To measure rather than

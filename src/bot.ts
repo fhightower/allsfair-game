@@ -40,10 +40,13 @@ export const INCOME_WEIGHT = 4;
 
 // Action-scorer weights. These drive candidate *generation*, not the final
 // choice — the search picks between whole trios, and with a candidate pool this
-// wide it filters whatever the scorer produces. Swept individually against the
-// pre-tuning bot and every one of them is flat across a wide range (84-88%), so
-// treat them as "roughly sane" rather than tuned, and do not spend time
-// re-deriving them. See docs/superpowers/plans/2026-07-28-bot-strength.md.
+// wide it filters whatever the scorer produces.
+//
+// Every one of them was swept individually against a frozen copy of the
+// pre-tuning bot and they are all flat: advance 0.8/1.6/2.4 scores 87/88/87%,
+// capture 0.2/1.5 scores 85/86%, enemy-home 0/4.0 scores 84/86%. Even removing
+// the enemy-home bonus entirely costs 4 points. Treat them as "roughly sane"
+// rather than tuned, and do not spend a day re-deriving them.
 export const ADVANCE_WEIGHT = 1.2;
 export const TROOPS_WEIGHT = 0.08;
 export const CAPTURE_WEIGHT = 0.6;
