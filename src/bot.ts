@@ -5,11 +5,15 @@
 // than the mirrored action key, and its RNG stream differs, so it never
 // matched the prototype move-for-move.
 //
-// Weights and search parameters below are inherited from those measurements.
-// test/bot.strength.test.ts is the authority on how strong this bot actually
-// is (>=60% vs heuristic, >=90% vs random over 50 games) — re-run it after any
-// change here. To tune rather than just gate, build a W/L/D sweep on top of
-// its playGame helper; there is no external eval harness anymore.
+// The search parameters below are no longer the prototype's: they were swept
+// against a frozen copy of that bot (test/eval/bot-baseline.ts), which this one
+// now beats 87% of the time over 300 games. The action-scorer weights ARE still
+// the prototype's, deliberately — see the note above them.
+//
+// test/bot.strength.test.ts gates strength; test/eval/ is the harness for
+// measuring it. Re-run both after any change here:
+//
+//   BOT_SWEEP=1 npx vitest run test/eval/sweep.test.ts --reporter=verbose --silent=false
 import { Board, Move, MovePair, TEAM_1, TEAM_2 } from "./engine";
 import { choice, makeRng } from "./rng";
 
@@ -33,6 +37,19 @@ export const HOLD_BASE = -0.1;
 // (weighted 3 per troop) — not the 0 the evaluation used to give an empty
 // square it owned.
 export const INCOME_WEIGHT = 4;
+
+// Action-scorer weights. These drive candidate *generation*, not the final
+// choice — the search picks between whole trios, and with a candidate pool this
+// wide it filters whatever the scorer produces. Swept individually against the
+// pre-tuning bot and every one of them is flat across a wide range (84-88%), so
+// treat them as "roughly sane" rather than tuned, and do not spend time
+// re-deriving them. See docs/superpowers/plans/2026-07-28-bot-strength.md.
+export const ADVANCE_WEIGHT = 1.2;
+export const TROOPS_WEIGHT = 0.08;
+export const CAPTURE_WEIGHT = 0.6;
+export const OVERWHELM_BONUS = 1.0;
+export const CLAIM_BONUS = 0.45;
+export const ENEMY_HOME_BONUS = 1.5;
 
 export const PASS_MOVE: Record<number, string> = { 1: "a0b", 2: "i0h" };
 export const HOME_SQUARE: Record<number, string> = { 1: "a", 2: "i" };
@@ -127,15 +144,15 @@ export function scoredActions(
 
   const scored = legalActions(board, player).map((action) => {
     const destination = board.state[action.end];
-    let score = (dist[action.start] - dist[action.end]) * 1.2;
-    score += action.troops * 0.08;
+    let score = (dist[action.start] - dist[action.end]) * ADVANCE_WEIGHT;
+    score += action.troops * TROOPS_WEIGHT;
     if (destination.owner === opponent) {
-      score += Math.min(action.troops, destination.troopCount) * 0.6;
-      if (action.troops >= destination.troopCount) score += 1.0;
+      score += Math.min(action.troops, destination.troopCount) * CAPTURE_WEIGHT;
+      if (action.troops >= destination.troopCount) score += OVERWHELM_BONUS;
     } else if (destination.owner === 0) {
-      score += 0.45;
+      score += CLAIM_BONUS;
     }
-    if (action.end === enemyHome) score += 1.5;
+    if (action.end === enemyHome) score += ENEMY_HOME_BONUS;
     // Defense. Both terms are scaled by the deficit, so a bot that is not
     // under threat scores exactly as it did before these were added.
     if (deficit > 0) {

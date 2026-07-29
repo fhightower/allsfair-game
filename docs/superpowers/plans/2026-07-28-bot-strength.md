@@ -66,16 +66,19 @@ scored it as nothing. That was the bot misunderstanding its own economy.
 `BOT_SWEEP=1 BOT_GAMES=40 npx vitest run test/eval/sweep.test.ts --reporter=verbose --silent=false`
 — 80 games per opponent, both seats:
 
-| Opponent | Before | After |
-|---|---|---|
-| random | 100% | 100% |
-| heuristic | 86% | 98% |
-| pre-tuning bot | — | **70%** |
-| rush (beeline at home) | — | 99% |
-| human(2,2) | 98% | 100% |
-| human(4,3) | 91% | 99% |
-| **human(6,2)** — the reported failure mode | **86%** | **99%** |
-| stacker, turtle | 100% | 100% |
+| Opponent | Before | After first pass | Final |
+|---|---|---|---|
+| random | 100% | 100% | 100% |
+| heuristic | 86% | 98% | 99% |
+| pre-tuning bot | — | 70% | **85–87%** |
+| rush (beeline at home) | — | 99% | 99% |
+| human(2,2) | 98% | 100% | 100% |
+| human(4,3) | 91% | 99% | 100% |
+| **human(6,2)** — the reported failure mode | **86%** | 99% | **100%** |
+| stacker, turtle | 100% | 100% | 100% |
+
+The pre-tuning number is 85% in the 80-game sweep above and 87% in a dedicated
+300-game run; the scripted opponents are saturated and no longer discriminate.
 
 `human(t,b)` trades for `t` rounds, banks at home for `b`, then marches: the
 line from the reported game. The pre-tuning bot lost 14% of those.
@@ -98,12 +101,64 @@ fixtures confirm the engine behaviour is unchanged.
 Note for anyone reading the original design spec: it claims the bot turn is
 "sub-millisecond". That was never true — the shipped bot took 13 ms.
 
+## Second pass: what the search budget was worth
+
+With the engine 6× cheaper, the search could afford to be much bigger. Screened
+against the frozen bot at 120 games per point, both seats.
+
+| Change | Result |
+|---|---|
+| Reference (40 candidates, 6 opponent trios) | 68% |
+| 64 candidates | 78% |
+| 96 candidates | 78% |
+| 16 opponent trios | 74% |
+| 24 opponent trios (with 64 candidates) | 89% |
+| **64 candidates + 16 opponent trios** | **88%** |
+
+The two compound — 78% and 74% separately, 88% together. A wider candidate pool
+is only worth having if the opponent model can tell the candidates apart, and a
+better opponent model only helps if there is something to choose between. Past
+those points it flattens, so this takes the cheaper of the tied settings.
+Confirmed at 300 games: **87%**, even across seats.
+
+`MIN_WEIGHT` was already at a good value: 0.25 and 0.5 tie at 68%, 0 gives 65%,
+0.75 gives 62%.
+
+## Second pass: three things that did not work
+
+Recorded because each is an obvious idea someone will want to retry.
+
+**Two-round lookahead — worse, monotonically.** Re-ranking the top candidates by
+playing a second round (both sides answering with their greedy trio) scored 79%
+against the one-round bot's 88%. Blending it back toward the one-round score
+recovers in proportion to how much lookahead is removed: blend 0.25 → 85%,
+blend 0.5 → 82%, pure two-round → 79%. The depth-2 reply model is a worse
+predictor than no model at all, so the extra depth is pure noise. A better reply
+model — not a deeper search — is what this would need.
+
+**A wider opponent model — worse.** Sampling opponent trios at mixed top-3/top-8
+width, the way candidates are generated, drops it to 75%. Narrowing to top-2
+gives 82%. Top-3 is the sweet spot: the useful opponent model is one that plays
+*well*, not one that covers the space.
+
+**Re-deriving the action-scorer weights — nothing there.** Every weight is flat
+across a wide range: advance 0.8/1.6/2.4 → 87/88/87%, capture 0.2/1.5 →
+85/86%, enemy-home 0/4.0 → 84/86%, claim 1.0/2.0/3.0 → 88/77/78%. Even setting
+the enemy-home bonus to zero costs 4 points. These weights drive candidate
+*generation*, and with 64 candidates sampled from the top 3 and top 8, the
+search filters whatever they produce. They are named constants now with that
+finding recorded next to them; they are not worth tuning.
+
 ## Remaining
 
-1. Update the "Bot" section of `README.md`.
-2. `docs/superpowers/specs/2026-07-10-search-bot-design.md` is stale (action
-   space, candidate generation, evaluation terms, and the timing claim).
-3. Open a PR against `main`. Do not merge without the user's say-so.
+Nothing outstanding. Possible future work, in rough order of promise:
+
+1. A better reply model for depth-2 (the lookahead result above suggests the
+   ceiling is in the opponent model, not the depth).
+2. Tuning the evaluation weights (`material`/`squares`/`progress`/`exposed`),
+   which have never been swept — only `INCOME_WEIGHT` was.
+3. Revisiting the defensive terms against an opponent strong enough to punish an
+   open home, which none of the current pool does.
 
 ## Constraints
 
