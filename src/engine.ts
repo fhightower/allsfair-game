@@ -35,6 +35,26 @@ export function startingBoardState(): BoardState {
 
 const ADJACENCY: BoardState = startingBoardState();
 
+/**
+ * Copies board state, preserving key order (a..i drives the HTML layout).
+ *
+ * `neighbors` is shared rather than copied: the adjacency of a square never
+ * changes, and this runs hundreds of times per bot turn, where structuredClone
+ * was the single largest cost. Nothing may mutate a `neighbors` array.
+ */
+function cloneState(state: BoardState): BoardState {
+  const copy: BoardState = {};
+  for (const name of Object.keys(state)) {
+    const node = state[name];
+    copy[name] = {
+      neighbors: node.neighbors,
+      owner: node.owner,
+      troopCount: node.troopCount,
+    };
+  }
+  return copy;
+}
+
 export class Move {
   start: string;
   troopCount: number;
@@ -115,10 +135,16 @@ export class Board {
   state: BoardState;
   startingState: BoardState;
   history: HistoryEntry[];
+  /**
+   * Planning clones are simulated, never rendered, so they skip history
+   * bookkeeping — snapshotting every move pair of every simulated round is
+   * pure waste in the bot's search loop.
+   */
+  private recordsHistory = true;
 
   constructor() {
     this.state = startingBoardState();
-    this.startingState = structuredClone(this.state);
+    this.startingState = cloneState(this.state);
     this.history = [];
   }
 
@@ -191,8 +217,9 @@ export class Board {
   }
 
   private snapshot(moves: MovePair): void {
+    if (!this.recordsHistory) return;
     this.history.unshift({
-      state: structuredClone(this.state),
+      state: cloneState(this.state),
       team1MoveStr: moves.team1Move.toString(),
       team2MoveStr: moves.team2Move.toString(),
     });
@@ -266,10 +293,11 @@ export class Board {
     }
   }
 
-  /** Game-state clone for bot planning: copied state, fresh empty history. */
+  /** Game-state clone for bot planning: copied state, no history recording. */
   clone(): Board {
     const copy = new Board();
-    copy.state = structuredClone(this.state);
+    copy.state = cloneState(this.state);
+    copy.recordsHistory = false;
     return copy;
   }
 

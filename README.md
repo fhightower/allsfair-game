@@ -30,8 +30,26 @@ an upstream generator.
 ## Bot
 
 Play-against-bot ships: `create_game` with `play_against_ml` seats a trio-search
-bot (`src/bot.ts`) as player 2. Design spec:
-`docs/superpowers/specs/2026-07-10-search-bot-design.md`.
+bot (`src/bot.ts`) as player 2. Each round it generates candidate trios, plays
+each against a set of guessed opponent trios using the real engine, and keeps
+the one with the best worst-case-weighted outcome.
+
+The constants at the top of `src/bot.ts` carry their own notes on what is
+measured and what is a judgement call — the search sizes were swept, the
+action-scorer weights were swept and turned out not to matter, and the
+defensive terms are kept on judgement rather than on any win-rate gain.
+
+`test/bot.strength.test.ts` gates strength against random, greedy-heuristic,
+pre-tuning, and human-style opponents, from both seats. To measure rather than
+just gate:
+
+```shell
+BOT_SWEEP=1 npx vitest run test/eval/sweep.test.ts --reporter=verbose --silent=false
+```
+
+`test/eval/` holds the harness, the opponent pool, and a frozen copy of the
+pre-tuning bot to A/B against. Both vitest flags are needed or the output is
+swallowed.
 
 ## Development
 
