@@ -10,12 +10,27 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 export function createTestDb(): D1Database {
-  const db = new DatabaseSync(":memory:");
-  const schema = readFileSync(
-    path.join(here, "../migrations/0001_init.sql"),
-    "utf8"
-  );
-  db.exec(schema);
+  return createSqliteDb(":memory:");
+}
+
+/**
+ * The same stand-in over an arbitrary SQLite file, so `test/eval/serve.ts` can
+ * run the real worker locally. Applying the schema is skipped when the file
+ * already has it — the migration uses plain CREATE TABLE, which would throw on
+ * a second open.
+ */
+export function createSqliteDb(filename: string): D1Database {
+  const db = new DatabaseSync(filename);
+  const existing = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='games'")
+    .get();
+  if (!existing) {
+    const schema = readFileSync(
+      path.join(here, "../migrations/0001_init.sql"),
+      "utf8"
+    );
+    db.exec(schema);
+  }
   return { prepare: (sql: string) => statement(db, sql, []) } as D1Database;
 }
 

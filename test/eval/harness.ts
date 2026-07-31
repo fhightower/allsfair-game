@@ -7,11 +7,13 @@
 // head-to-head instead of only against weak scripted opponents.
 import { planTrio } from "../../src/bot";
 import {
+  evaluate as evaluateBaseline,
   legalActions,
   PASS_MOVE,
   planTrio as planTrioBaseline,
   sampleTrio as sampleTrioBaseline,
 } from "./bot-baseline";
+import { planTrio as planTrioArgmax } from "./bot-argmax";
 import { Board, Move, MovePair } from "../../src/engine";
 import { choice, makeRng } from "../../src/rng";
 
@@ -106,6 +108,15 @@ export const searchBot: Planner = (b, player, seed) =>
 /** Frozen pre-tuning bot, for head-to-head A/B. */
 export const baselineBot: Planner = (b, player, seed) =>
   planTrioBaseline(b, player, makeRng(seed));
+
+/**
+ * Frozen argmax bot — the generation before the double oracle. It is stronger
+ * than `baselineBot` in a straight fight and 4% against its own exploiter, so
+ * it is the control for "did solving the round cost raw strength, and was the
+ * exploitability worth it".
+ */
+export const argmaxBot: Planner = (b, player, seed) =>
+  planTrioArgmax(b, player, makeRng(seed));
 
 /**
  * Greedy argmax of the action heuristic — the old strength-gate opponent.
@@ -233,6 +244,181 @@ export function makeHumanLike(tradeRounds: number, bankRounds: number): Planner 
     return rushBot(b, player, seed, round);
   };
 }
+
+/**
+ * Best-responds to the bot's *policy*, which is what a human does after a few
+ * games: it cannot see the trio the bot submitted, but it can learn what the
+ * bot tends to do from the position and answer that.
+ *
+ * Each round it samples `samples` trios from the live bot planner (its own
+ * seeds, never the harness's, so it is guessing and not peeking), then picks
+ * the reply that scores best averaged over those guesses.
+ *
+ * Everything the exploiter uses for its *own* play — candidate generation and
+ * evaluation — comes from the frozen baseline, exactly like `heuristicBot`.
+ * Only the policy it models is live. That keeps the exploiter's strength fixed
+ * as `src/bot.ts` changes, so the win rate against it is comparable over time.
+ *
+ * Unlike everything else in this pool it adapts inside the game, so it is the
+ * only opponent here that can tell two strong bots apart: the scripted
+ * opponents are all pinned at 99-100%.
+ */
+export function makeExploiter(
+  bot: Planner,
+  samples = 6,
+  candidates = 120
+): Planner {
+  return (board, me, seed, round) => {
+    const botSeat = me === 1 ? 2 : 1;
+    const rand = makeRng(seed);
+    const guesses: string[][] = [];
+    for (let s = 0; s < samples; s++) {
+      guesses.push(bot(board, botSeat, `${seed}-guess-${s}`, round));
+    }
+    const replies: string[][] = [
+      sampleTrioBaseline(board, me, rand, 1),
+      rushBot(board, me, seed, round),
+    ];
+    for (let i = replies.length; i < candidates; i++) {
+      replies.push(sampleTrioBaseline(board, me, rand, i % 3 === 0 ? 3 : 8));
+    }
+
+    let best = replies[0];
+    let bestScore = -Infinity;
+    for (const reply of replies) {
+      let total = 0;
+      for (const guess of guesses) {
+        const sim = board.clone();
+        const [t1, t2] = me === 1 ? [reply, guess] : [guess, reply];
+        for (let i = 0; i < 3; i++) {
+          sim.applyMovePair(new MovePair(new Move(t1[i]), new Move(t2[i])));
+          if (sim.winner) break;
+        }
+        if (!sim.winner) sim.restock();
+        total += evaluateBaseline(sim, me);
+      }
+      if (total > bestScore) {
+        bestScore = total;
+        best = reply;
+      }
+    }
+    return best;
+  };
+}
+
+/** The exploiter aimed at the bot under test. */
+export const exploiterBot: Planner = makeExploiter(searchBot);
+
+/**
+ * Frozen copy of `denialTrio` — attack whatever the opponent has troops on,
+ * biggest stack first. Deliberately duplicated from src/bot.ts rather than
+ * imported, for the same reason `heuristicBot` uses the baseline scorer: an
+ * exploiter that tracks the live bot would stop being a fixed yardstick.
+ */
+function denialTrioFrozen(
+  board: Board,
+  player: number,
+  rand: () => number,
+  greedy: boolean
+): string[] {
+  const opponent = player === 1 ? 2 : 1;
+  const plan = board.clone();
+  const moves: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const attacks = legalActions(plan, player).filter((a) => {
+      const destination = plan.state[a.end];
+      return destination.owner === opponent && destination.troopCount > 0;
+    });
+    if (attacks.length === 0) {
+      moves.push(PASS_MOVE[player]);
+      continue;
+    }
+    const scored = attacks.map((a) => {
+      const destination = plan.state[a.end];
+      const overwhelms =
+        a.troops > destination.troopCount
+          ? 2
+          : a.troops === destination.troopCount
+            ? 1
+            : 0;
+      return {
+        a,
+        score: overwhelms * 10 + destination.troopCount - a.troops * 0.1,
+      };
+    });
+    scored.sort((x, y) => y.score - x.score);
+    // Greedy must not draw from `rand` — see the same note in src/bot.ts.
+    const pick = greedy
+      ? scored[0]
+      : choice(scored.slice(0, Math.min(4, scored.length)), rand);
+    const s = `${pick.a.start}${pick.a.troops}${pick.a.end}`;
+    plan.applyPlannedMove(new Move(s), player);
+    moves.push(s);
+  }
+  return moves;
+}
+
+/**
+ * The exploiter whose reply pool also contains source-denial trios, so it can
+ * play the line a human found and `makeExploiter` structurally cannot: empty the
+ * square the bot is about to move from, and collect a round where the bot plays
+ * one move against three.
+ *
+ * This exists because the plain exploiter measured 33% against a bot that a
+ * human beat easily. It was not that the gate's floor was too low — the gate was
+ * measuring a different exploit. Both are kept: they are separate axes, and the
+ * bot's real exposure is the worse of the two.
+ */
+export function makeDenialExploiter(
+  bot: Planner,
+  samples = 6,
+  candidates = 120
+): Planner {
+  return (board, me, seed, round) => {
+    const botSeat = me === 1 ? 2 : 1;
+    const rand = makeRng(seed);
+    const guesses: string[][] = [];
+    for (let s = 0; s < samples; s++) {
+      guesses.push(bot(board, botSeat, `${seed}-guess-${s}`, round));
+    }
+    const replies: string[][] = [
+      sampleTrioBaseline(board, me, rand, 1),
+      rushBot(board, me, seed, round),
+      denialTrioFrozen(board, me, rand, true),
+    ];
+    for (let i = replies.length; i < candidates; i++) {
+      replies.push(
+        i % 2 === 0
+          ? denialTrioFrozen(board, me, rand, false)
+          : sampleTrioBaseline(board, me, rand, i % 3 === 0 ? 3 : 8)
+      );
+    }
+
+    let best = replies[0];
+    let bestScore = -Infinity;
+    for (const reply of replies) {
+      let total = 0;
+      for (const guess of guesses) {
+        const sim = board.clone();
+        const [t1, t2] = me === 1 ? [reply, guess] : [guess, reply];
+        for (let i = 0; i < 3; i++) {
+          sim.applyMovePair(new MovePair(new Move(t1[i]), new Move(t2[i])));
+          if (sim.winner) break;
+        }
+        if (!sim.winner) sim.restock();
+        total += evaluateBaseline(sim, me);
+      }
+      if (total > bestScore) {
+        bestScore = total;
+        best = reply;
+      }
+    }
+    return best;
+  };
+}
+
+/** The denial exploiter aimed at the bot under test. */
+export const denialExploiterBot: Planner = makeDenialExploiter(searchBot);
 
 /**
  * Holds a garrison at home and only commits troops beyond `keep`. Punishes a

@@ -7,9 +7,12 @@
 // Every matchup is played from both seats (see harness `sweep`).
 import { describe, it } from "vitest";
 import {
+  argmaxBot,
   baselineBot,
   formatTally,
   heuristicBot,
+  makeDenialExploiter,
+  makeExploiter,
   makeHumanLike,
   makeStacker,
   makeTurtle,
@@ -35,6 +38,7 @@ describe.skipIf(!process.env.BOT_SWEEP)("bot tuning sweep", () => {
       ["random", randomBot],
       ["heuristic", heuristicBot],
       ["baseline-bot", baselineBot],
+      ["argmax-bot", argmaxBot],
       ["rush", rushBot],
       ["human(2,2)", makeHumanLike(2, 2)],
       ["human(4,3)", makeHumanLike(4, 3)],
@@ -43,6 +47,15 @@ describe.skipIf(!process.env.BOT_SWEEP)("bot tuning sweep", () => {
       ["stacker(build=4)", makeStacker(4)],
       ["turtle(keep=3)", makeTurtle(3)],
       ["turtle(keep=6)", makeTurtle(6)],
+      // The only opponents here that are not saturated, and so the only ones
+      // that can tell two strong bots apart. Two separate exploit axes: guessing
+      // the bot's plan, and emptying the square it is about to move from. Read
+      // the worse of the two as the bot's exposure. Measured 35% / 38% for the
+      // current bot; everything else in this pool reads 66-100%.
+      // Slow — they plan the bot's turn several times per round to sample the
+      // policy — so BOT_ONLY=exploiter is usually what you want.
+      ["exploiter", makeExploiter(UNDER_TEST)],
+      ["denial-exploiter", makeDenialExploiter(UNDER_TEST)],
     ];
     const opponents = ONLY
       ? pool.filter(([name]) => name.includes(ONLY))

@@ -29,27 +29,38 @@ an upstream generator.
 
 ## Bot
 
-Play-against-bot ships: `create_game` with `play_against_ml` seats a trio-search
-bot (`src/bot.ts`) as player 2. Each round it generates candidate trios, plays
-each against a set of guessed opponent trios using the real engine, and keeps
-the one with the best worst-case-weighted outcome.
+Play-against-bot ships: `create_game` with `play_against_ml` seats the bot
+(`src/bot.ts`) as player 2. Moves are simultaneous, so each round is a matrix
+game, and the bot solves it as one: it generates candidate trios for both sides,
+scores every pairing with the real engine, finds a mixed-strategy equilibrium by
+regret matching, and *samples* its trio from that mix. Between solves, a
+double-oracle loop asks each side for its best response to the other's current
+mix and adds those counters to the strategy sets.
 
-The constants at the top of `src/bot.ts` carry their own notes on what is
-measured and what is a judgement call — the search sizes were swept, the
-action-scorer weights were swept and turned out not to matter, and the
-defensive terms are kept on judgement rather than on any win-rate gain.
+That structure exists for one measured reason. Every earlier bot picked the
+single best trio against a fixed guess at the opponent, and a bot that always
+answers a position the same way can be learned and farmed — against an opponent
+that samples the bot's policy and best-responds to it, the argmax bot won 4% of
+games while beating every scripted opponent 99-100%. The constants at the top of
+`src/bot.ts` carry the numbers, including the tradeoff the equilibrium makes:
+solving the round costs raw strength against weak opponents and buys back
+robustness against ones that adapt.
 
 `test/bot.strength.test.ts` gates strength against random, greedy-heuristic,
-pre-tuning, and human-style opponents, from both seats. To measure rather than
-just gate:
+pre-tuning, argmax, human-style, and best-responding opponents, from both seats.
+To measure rather than just gate:
 
 ```shell
 BOT_SWEEP=1 npx vitest run test/eval/sweep.test.ts --reporter=verbose --silent=false
 ```
 
-`test/eval/` holds the harness, the opponent pool, and a frozen copy of the
-pre-tuning bot to A/B against. Both vitest flags are needed or the output is
-swallowed.
+`test/eval/` holds the harness, the opponent pool, and frozen copies of the two
+previous bot generations (`bot-baseline.ts`, `bot-argmax.ts`) to A/B against.
+Both vitest flags are needed or the output is swallowed.
+
+The `exploiter` opponent in that pool is the one worth watching: it is the only
+one that adapts inside a game, so it is the only one that can tell two strong
+bots apart. The scripted opponents saturate.
 
 ## Development
 
@@ -57,11 +68,22 @@ swallowed.
 npm install
 npm test        # vitest; D1 is stubbed with node:sqlite (see test/d1-shim.ts)
 npx tsc         # typecheck
+npm run serve   # the real app in a browser, on plain Node (no workerd)
 ```
 
-Note: `wrangler dev` and miniflare need workerd, which requires macOS 13.5+ or
-Linux. On older machines the test suite still runs (plain node), and real-runtime
-verification happens against the deployed Worker.
+Note: `npm run dev` (`wrangler dev`) and miniflare need workerd, which requires
+macOS 13.5+ or Linux. On older machines everything above still works, because
+none of it uses workerd.
+
+`npm run serve` (`test/eval/serve.ts`) is a `node:http` server that serves
+`public/index.html` and hands everything else to the actual worker entry point
+(`src/index.ts`), with `test/d1-shim.ts` standing in for D1. The frontend, API,
+engine and bot are the deployed code; only the runtime differs. Games are
+in-memory unless you set `ALLSFAIR_DB=some.db`; `PORT` overrides 8787.
+
+It does not replace the deploy smoke test — it exercises neither real D1 nor the
+platform's assets binding. Node loads modules once at startup, so restart it
+after editing `src/bot.ts` or you will keep playing the old bot.
 
 ## Deploy
 

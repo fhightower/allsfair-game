@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "NODE_OPTIONS=--experimental-sqlite vitest run",
+    "serve": "NODE_OPTIONS=--experimental-sqlite npx tsx test/eval/serve.ts",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
