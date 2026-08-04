@@ -6,9 +6,11 @@
 // matched the prototype move-for-move.
 //
 // The search parameters below are no longer the prototype's: they were swept
-// against a frozen copy of that bot (test/eval/bot-baseline.ts), which this one
-// now beats 87% of the time over 300 games. The action-scorer weights ARE still
-// the prototype's, deliberately — see the note above them.
+// against a frozen copy of that bot (test/eval/bot-baseline.ts). The 87%-over-
+// 300-games figure that used to sit here belonged to the argmax generation
+// (now frozen at test/eval/bot-argmax.ts); this bot measures 66% against that
+// same baseline, deliberately — see ADVERSARIAL_WEIGHT. The action-scorer
+// weights ARE still the prototype's — see the note above them.
 //
 // WHY THIS IS A GAME SOLVER AND NOT AN ARGMAX. Every bot before this one picked
 // the single best trio against a fixed guess at the opponent. That is a pure
@@ -58,7 +60,11 @@ export const WIDE_TOP_N = 8;
 // One trio in this many is a `denialTrio` — an attack on whatever the opponent
 // has troops on, rather than a push at their home. Both the seed model and the
 // oracle pools get them; see denialTrio for why both, and why this number is
-// touchy. Measured against a denial-capable exploiter / the greedy heuristic:
+// touchy. Measured against a denial-capable exploiter / the greedy heuristic.
+// NOTE: that exploiter is a live-scorer variant, not `makeDenialExploiter` in
+// test/eval/harness.ts, which is pinned to the frozen baseline scorer and is a
+// weaker opponent (it reads 60% where this column reads 38%). Reproducing this
+// table means swapping the harness exploiter's generators for the live ones.
 //
 //   cadence         denial exploiter   heuristic
 //   none                  25%             86%
@@ -277,11 +283,8 @@ export function sampleTrio(
   const plan = board.clone();
   const moves: string[] = [];
   for (let i = 0; i < MOVES_PER_ROUND; i++) {
+    // Never empty: scoredActions always appends the hold action.
     const scored = scoredActions(plan, player);
-    if (scored.length === 0) {
-      moves.push(PASS_MOVE[player]);
-      continue;
-    }
     const pool = scored.slice(0, Math.min(topN, scored.length));
     const { action } = choice(pool, rand);
     const moveString = toMoveString(action);
@@ -469,7 +472,32 @@ export function evaluate(board: Board, me: number): number {
  * sum to zero. Subtracting their evaluation makes it antisymmetric by
  * construction.
  */
+/**
+ * Memo for `payoff`, valid only within one `planTrio` call — it is keyed on the
+ * trio pair alone, so it must be cleared whenever the board changes.
+ *
+ * The oracles re-score a fixed pool against a support set that grows by at most
+ * one entry per round, so the same pairing is simulated many times: measured at
+ * 69% of calls on the opening board and 68% mid-game. Caching them is
+ * output-identical, not an approximation.
+ */
+const payoffMemo = new Map<string, number>();
+
 function payoff(
+  board: Board,
+  myTrio: string[],
+  oppTrio: string[],
+  me: number
+): number {
+  const key = `${myTrio[0]},${myTrio[1]},${myTrio[2]}|${oppTrio[0]},${oppTrio[1]},${oppTrio[2]}`;
+  const cached = payoffMemo.get(key);
+  if (cached !== undefined) return cached;
+  const value = computePayoff(board, myTrio, oppTrio, me);
+  payoffMemo.set(key, value);
+  return value;
+}
+
+function computePayoff(
   board: Board,
   myTrio: string[],
   oppTrio: string[],
@@ -549,7 +577,7 @@ function fromRegret(regret: number[]): number[] {
  *
  * Returns my mix and the blended opponent mix the oracles should answer.
  */
-function solve(
+export function solve(
   matrix: number[][],
   model: number[],
   adversarial: number,
@@ -672,6 +700,7 @@ export function planTrio(
   me: number,
   rand: () => number
 ): string[] {
+  payoffMemo.clear(); // keyed on trios only, so it must not outlive this board
   const them = me === 1 ? TEAM_2 : TEAM_1;
   const mine = candidateTrios(board, me, rand, SEED_TRIOS);
   const theirs = candidateTrios(board, them, rand, SEED_TRIOS);
@@ -734,12 +763,27 @@ export function planTrio(
   return mine[mix.mine.indexOf(Math.max(...mix.mine))];
 }
 
-/** Entry point: plan player 2's trio for the given round, deterministically. */
+/**
+ * Entry point: plan player 2's trio for the given round, deterministically.
+ *
+ * `seedSource` must be something the opponent cannot see. It used to be the
+ * game guid, which player 1 receives from `create_game` and sends on every
+ * call — and since the board and round index are public too and this code is
+ * open source, that let them recompute this exact trio and answer it. A mixed
+ * strategy whose draw is public is a pure strategy; the whole point of solving
+ * the round (see planTrio) is lost. `src/actions.ts` passes the bot's own
+ * `player_2_secret`, which is generated server-side and never returned by any
+ * endpoint.
+ *
+ * Determinism per (game, round) is still required and still holds:
+ * `generateMlMovesIfNeeded` replans on retry and completes a partially written
+ * trio by slicing this result, which only works if replanning reproduces it.
+ */
 export function planBotTrio(
   board: Board,
-  gameGuid: string,
+  seedSource: string,
   completedRounds: number
 ): string[] {
-  const rand = makeRng(`${gameGuid}:${completedRounds}`);
+  const rand = makeRng(`${seedSource}:${completedRounds}`);
   return planTrio(board, 2, rand);
 }

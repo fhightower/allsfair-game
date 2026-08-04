@@ -11,6 +11,7 @@ import {
   rushTrio,
   sampleTrio,
   scoredActions,
+  solve,
 } from "../src/bot";
 import { Board, Move, MovePair, startingBoardState } from "../src/engine";
 import { makeRng } from "../src/rng";
@@ -254,5 +255,66 @@ describe("planBotTrio", () => {
     expect(
       [r1, g2].some((t) => JSON.stringify(t) !== JSON.stringify(r0))
     ).toBe(true);
+  });
+});
+
+// The game-theory core. Covered otherwise only by 12-game strength gates whose
+// floors sit well below the measured rate, so a sign-flipped regret update or an
+// average/current-strategy mix-up would very likely still pass them. These are
+// games whose equilibria are known by hand.
+describe("solve", () => {
+  const uniform = (n: number) => new Array(n).fill(1 / n);
+
+  it("finds the uniform equilibrium of rock-paper-scissors", () => {
+    // rows and columns both R, P, S; entries are the row player's payoff
+    const rps = [
+      [0, -1, 1],
+      [1, 0, -1],
+      [-1, 1, 0],
+    ];
+    const { mine } = solve(rps, uniform(3), 1, 4000);
+    for (const p of mine) expect(p).toBeCloseTo(1 / 3, 2);
+  });
+
+  it("finds the uniform equilibrium of matching pennies", () => {
+    const pennies = [
+      [1, -1],
+      [-1, 1],
+    ];
+    const { mine } = solve(pennies, uniform(2), 1, 4000);
+    for (const p of mine) expect(p).toBeCloseTo(0.5, 2);
+  });
+
+  it("collapses onto a dominant row", () => {
+    const dominant = [
+      [1, 1],
+      [0, 0],
+      [-1, -1],
+    ];
+    const { mine } = solve(dominant, uniform(2), 1, 4000);
+    expect(mine[0]).toBeGreaterThan(0.95);
+  });
+
+  it("returns a probability distribution", () => {
+    const arbitrary = [
+      [3, -2, 0],
+      [-1, 4, 1],
+      [0, 1, -3],
+    ];
+    const { mine, theirs } = solve(arbitrary, uniform(3), 1, 1000);
+    expect(mine.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 6);
+    expect(theirs.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 6);
+    for (const p of [...mine, ...theirs]) expect(p).toBeGreaterThanOrEqual(0);
+  });
+
+  // adversarial < 1 pins part of the column player's mass on a fixed model, so
+  // the row player should answer the blend rather than the equilibrium.
+  it("best-responds to the model when the opponent is not fully adversarial", () => {
+    const pennies = [
+      [1, -1],
+      [-1, 1],
+    ];
+    const { mine } = solve(pennies, [1, 0], 0, 2000);
+    expect(mine[0]).toBeGreaterThan(0.95);
   });
 });

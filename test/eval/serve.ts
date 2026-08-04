@@ -86,7 +86,22 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(port, () => {
+server.on("error", (error: NodeJS.ErrnoException) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(
+      `Port ${port} is already in use — another copy is probably still running.\n` +
+        `  pkill -f "tsx test/eval/serve.ts"   (or set PORT=... for a different one)`
+    );
+  } else {
+    console.error("Local server failed to start:", error);
+  }
+  process.exit(1);
+});
+
+// Loopback only: this is a dev server with no auth, and binding the IPv6 any
+// address also made a stale process holding 127.0.0.1 invisible — the new server
+// bound ::, reported success, and every request went to the old one.
+server.listen(port, "127.0.0.1", () => {
   console.log(`Allsfair running at http://localhost:${port}`);
   console.log(
     process.env.ALLSFAIR_DB

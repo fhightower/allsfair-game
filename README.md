@@ -58,9 +58,11 @@ BOT_SWEEP=1 npx vitest run test/eval/sweep.test.ts --reporter=verbose --silent=f
 previous bot generations (`bot-baseline.ts`, `bot-argmax.ts`) to A/B against.
 Both vitest flags are needed or the output is swallowed.
 
-The `exploiter` opponent in that pool is the one worth watching: it is the only
-one that adapts inside a game, so it is the only one that can tell two strong
-bots apart. The scripted opponents saturate.
+The two exploiter opponents in that pool are the ones worth watching: they are
+the only opponents that adapt inside a game, so they are the only ones that can
+tell two strong bots apart. The scripted opponents saturate. They attack
+different things — one guesses the bot's plan, the other empties the square it is
+about to move from — so read the worse of the two as the bot's exposure.
 
 ## Development
 

@@ -108,9 +108,10 @@ export async function createGame(
 // insert a trio — the loser writes nothing and returns fresh state.
 async function generateMlMovesIfNeeded(
   d1: D1Database,
-  gameGuid: string,
+  game: Game,
   rs: RoundState
 ): Promise<RoundState> {
+  const gameGuid = game.gameGuid;
   while (!rs.board.winner && rs.p1Count % 3 === 0 && rs.p1Count > rs.p2Count) {
     const roundIndex = Math.floor(rs.p2Count / 3);
     if (rs.p1Count < (roundIndex + 1) * 3) break;
@@ -120,7 +121,9 @@ async function generateMlMovesIfNeeded(
       gameGuid,
       roundIndex
     );
-    const planned = planBotTrio(board, gameGuid, roundIndex);
+    // Seeded from the bot's own secret, never the guid: the guid is public to
+    // player 1, and seeding from it made this trio reproducible by the opponent.
+    const planned = planBotTrio(board, game.player2Secret, roundIndex);
     const pending = planned.slice(Math.min(botMovesInRound.length, 3));
     if (pending.length === 0) break;
 
@@ -196,7 +199,7 @@ export async function submitMove(
   const move = new Move(moveStr);
   let rs = await saveMove(d1, gameGuid, move, Number(player));
   if (playAgainstMl && String(player) === "1") {
-    rs = await generateMlMovesIfNeeded(d1, gameGuid, rs);
+    rs = await generateMlMovesIfNeeded(d1, game, rs);
   }
   return roundStateResponse(gameGuid, secret, playAgainstMl, rs);
 }
@@ -219,7 +222,7 @@ export async function getMoves(
   const playAgainstMl = isMlGame(game);
   let rs = await getBoardAndRoundState(d1, gameGuid);
   if (playAgainstMl && String(player) === "1") {
-    rs = await generateMlMovesIfNeeded(d1, gameGuid, rs);
+    rs = await generateMlMovesIfNeeded(d1, game, rs);
   }
   return roundStateResponse(gameGuid, secret, playAgainstMl, rs);
 }

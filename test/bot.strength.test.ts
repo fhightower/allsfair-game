@@ -26,9 +26,12 @@ import {
   sweep,
 } from "./eval/harness";
 
-// Per seat, so double this many games per gate. Lower than it used to be
-// because solving the round costs ~110 ms a turn against the argmax bot's 15.
-const GAMES = 8;
+// Per seat, so double this many games per gate. Solving the round costs ~50 ms
+// a turn against the argmax bot's ~20 (it was ~130 before `payoff` was memoised).
+// The two exploiter gates set their own count: they plan the bot's turn seven
+// times per round, so they cost far more per game than the four below.
+const GAMES = 15;
+const EXPLOITER_GAMES = 10;
 
 describe("bot strength gates", () => {
   it("beats a random mover", { timeout: 120_000 }, () => {
@@ -43,9 +46,9 @@ describe("bot strength gates", () => {
 
   it("beats the pre-tuning bot", { timeout: 120_000 }, () => {
     const tally = sweep(baselineBot, searchBot, GAMES);
-    // Floor sits ~2 sigma under the measured rate: this gate plays 16 games, so
-    // one sigma is ~12 points and a tighter floor fails on noise alone.
-    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.4); // measured 66%
+    // Floors here sit ~2 sigma under the measured rate at this gate's sample
+    // size, so they catch a real regression without failing on noise.
+    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.5); // measured 66%
   });
 
   // The line a human used to beat the shipped bot: trade pieces off, bank
@@ -63,8 +66,12 @@ describe("bot strength gates", () => {
   // going back to a pure strategy. Deliberately a low floor with wide margin —
   // it is expensive per game, so it runs few of them and the variance is large.
   it("is not trivially exploitable", { timeout: 300_000 }, () => {
-    const tally = sweep(exploiterBot, searchBot, 6);
-    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.15); // measured 35%
+    const tally = sweep(exploiterBot, searchBot, EXPLOITER_GAMES);
+    // 35% is the real rate over 40 games, so this floor is deliberately far
+    // below it: at 20 games one sigma is ~11 points, and a floor near the mean
+    // would fail on noise. It is a collapse detector — a bot that reverted to a
+    // pure strategy scores ~4% here.
+    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.12); // measured 35%
   });
 
   // The second exploit axis, and the one the gate above could not see: empty the
@@ -79,7 +86,7 @@ describe("bot strength gates", () => {
   // is the number to believe about the bot's exposure (the previous build scored
   // 25% there); this gate only catches a collapse.
   it("is not trivially exploitable by source-denial", { timeout: 300_000 }, () => {
-    const tally = sweep(denialExploiterBot, searchBot, 6);
-    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.3); // measured 63%
+    const tally = sweep(denialExploiterBot, searchBot, EXPLOITER_GAMES);
+    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.35); // measured 60%
   });
 });

@@ -6,8 +6,9 @@ import {
   joinGame,
   submitMove,
 } from "../src/actions";
-import { getGameByGuid, writeGame, writeMove } from "../src/db";
-import { Move } from "../src/engine";
+import { getGameByGuid, getMovesForGuid, writeGame, writeMove } from "../src/db";
+import { Board, Move } from "../src/engine";
+import { planBotTrio } from "../src/bot";
 import { InvalidSecret } from "../src/exceptions";
 import { createTestDb } from "./d1-shim";
 
@@ -189,6 +190,31 @@ describe("bot games", () => {
     expect(resp!.player_2_move_count).toBe(3);
     expect(resp!.round_complete).toBe(true);
     expect(resp!.completed_rounds).toBe(1);
+  });
+
+  // The bot's trio must not be derivable from anything player 1 holds. The guid
+  // is returned by create_game and sent on every request, the round index is
+  // public, the round-start board is on screen, and src/bot.ts is open source —
+  // so seeding the planner from the guid (as it once did) let the opponent
+  // recompute the exact trio and answer it, which turns the mixed strategy the
+  // whole solver exists to produce back into a pure one.
+  it("plans moves player 1 cannot recompute from the game guid", async () => {
+    const created = await createBotGame();
+    for (const m of ["a1b", "a1d", "b1e"]) {
+      await submitMove(db, {
+        game_guid: created.game_guid,
+        move: m,
+        secret: created.secret,
+        player: 1,
+      });
+    }
+    const moves = await getMovesForGuid(db, created.game_guid);
+    const botMoves = moves.filter((m) => m.player === 2).map((m) => m.moveString);
+    expect(botMoves).toHaveLength(3);
+
+    // Everything player 1 legitimately has, fed to the real planner.
+    const guessed = planBotTrio(new Board(), created.game_guid, 0);
+    expect(botMoves).not.toEqual(guessed);
   });
 
   it("does not move the bot before player 1 finishes the trio", async () => {
