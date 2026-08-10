@@ -1,0 +1,1501 @@
+[
+  {
+    "game": "02dcb90d",
+    "round": 3,
+    "board": {
+      "a": [
+        1,
+        5
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        0
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        4
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        0,
+        0
+      ],
+      "h": [
+        0,
+        0
+      ],
+      "i": [
+        2,
+        4
+      ]
+    },
+    "humanTrio": [
+      "e4f",
+      "f4i",
+      "a5b"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "i1f",
+      "i1f",
+      "i0h"
+    ],
+    "strike": 4,
+    "garrison": 4,
+    "materialHuman": 9,
+    "materialBot": 4
+  },
+  {
+    "game": "0deb12a4",
+    "round": 3,
+    "board": {
+      "a": [
+        1,
+        4
+      ],
+      "b": [
+        2,
+        2
+      ],
+      "c": [
+        2,
+        1
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        0
+      ],
+      "f": [
+        1,
+        3
+      ],
+      "g": [
+        0,
+        0
+      ],
+      "h": [
+        2,
+        0
+      ],
+      "i": [
+        2,
+        4
+      ]
+    },
+    "humanTrio": [
+      "f3e",
+      "e3h",
+      "h3i"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "b1a",
+      "b1a",
+      "c1b"
+    ],
+    "strike": 3,
+    "garrison": 4,
+    "materialHuman": 7,
+    "materialBot": 7
+  },
+  {
+    "game": "12cf0e6e",
+    "round": 1,
+    "board": {
+      "a": [
+        1,
+        3
+      ],
+      "b": [
+        2,
+        2
+      ],
+      "c": [
+        2,
+        1
+      ],
+      "d": [
+        0,
+        0
+      ],
+      "e": [
+        1,
+        0
+      ],
+      "f": [
+        1,
+        3
+      ],
+      "g": [
+        0,
+        0
+      ],
+      "h": [
+        0,
+        0
+      ],
+      "i": [
+        2,
+        3
+      ]
+    },
+    "humanTrio": [
+      "f3i",
+      "a3b",
+      "b1e"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "b1a",
+      "b1a",
+      "c1b"
+    ],
+    "strike": 3,
+    "garrison": 3,
+    "materialHuman": 6,
+    "materialBot": 6
+  },
+  {
+    "game": "12cf0e6e",
+    "round": 6,
+    "board": {
+      "a": [
+        1,
+        6
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        1
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        5
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        1,
+        0
+      ],
+      "h": [
+        2,
+        0
+      ],
+      "i": [
+        2,
+        5
+      ]
+    },
+    "humanTrio": [
+      "e5f",
+      "c1f",
+      "f6i"
+    ],
+    "defensible": false,
+    "savingTrio": null,
+    "strike": 5,
+    "garrison": 5,
+    "materialHuman": 12,
+    "materialBot": 5
+  },
+  {
+    "game": "2cac0ea2",
+    "round": 8,
+    "board": {
+      "a": [
+        1,
+        6
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        0
+      ],
+      "d": [
+        1,
+        1
+      ],
+      "e": [
+        1,
+        1
+      ],
+      "f": [
+        1,
+        1
+      ],
+      "g": [
+        2,
+        2
+      ],
+      "h": [
+        2,
+        0
+      ],
+      "i": [
+        2,
+        3
+      ]
+    },
+    "humanTrio": [
+      "d1e",
+      "e2f",
+      "f3i"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "g1d",
+      "d1a",
+      "g1d"
+    ],
+    "strike": 1,
+    "garrison": 3,
+    "materialHuman": 9,
+    "materialBot": 5
+  },
+  {
+    "game": "2cac0ea2",
+    "round": 11,
+    "board": {
+      "a": [
+        1,
+        6
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        4
+      ],
+      "d": [
+        2,
+        1
+      ],
+      "e": [
+        2,
+        0
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        1,
+        0
+      ],
+      "h": [
+        1,
+        7
+      ],
+      "i": [
+        2,
+        9
+      ]
+    },
+    "humanTrio": [
+      "c4f",
+      "f4i",
+      "h7i"
+    ],
+    "defensible": false,
+    "savingTrio": null,
+    "strike": 7,
+    "garrison": 9,
+    "materialHuman": 17,
+    "materialBot": 10
+  },
+  {
+    "game": "315778d4",
+    "round": 4,
+    "board": {
+      "a": [
+        1,
+        5
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        0
+      ],
+      "d": [
+        2,
+        1
+      ],
+      "e": [
+        1,
+        0
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        2,
+        1
+      ],
+      "h": [
+        1,
+        9
+      ],
+      "i": [
+        2,
+        6
+      ]
+    },
+    "humanTrio": [
+      "h9i",
+      "a3d",
+      "d3e"
+    ],
+    "defensible": false,
+    "savingTrio": null,
+    "strike": 9,
+    "garrison": 6,
+    "materialHuman": 14,
+    "materialBot": 8
+  },
+  {
+    "game": "3fa88940",
+    "round": 7,
+    "board": {
+      "a": [
+        1,
+        6
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        2
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        3
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        1,
+        0
+      ],
+      "h": [
+        2,
+        1
+      ],
+      "i": [
+        2,
+        5
+      ]
+    },
+    "humanTrio": [
+      "c2f",
+      "e3f",
+      "f4i"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "h1e",
+      "i1f",
+      "i1f"
+    ],
+    "strike": 3,
+    "garrison": 5,
+    "materialHuman": 11,
+    "materialBot": 6
+  },
+  {
+    "game": "3fa88940",
+    "round": 9,
+    "board": {
+      "a": [
+        1,
+        5
+      ],
+      "b": [
+        2,
+        3
+      ],
+      "c": [
+        1,
+        0
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        2,
+        1
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        1,
+        0
+      ],
+      "h": [
+        1,
+        10
+      ],
+      "i": [
+        2,
+        4
+      ]
+    },
+    "humanTrio": [
+      "h10i",
+      "a3b",
+      "b3e"
+    ],
+    "defensible": false,
+    "savingTrio": null,
+    "strike": 10,
+    "garrison": 4,
+    "materialHuman": 15,
+    "materialBot": 8
+  },
+  {
+    "game": "4fbe68d7",
+    "round": 7,
+    "board": {
+      "a": [
+        1,
+        4
+      ],
+      "b": [
+        2,
+        3
+      ],
+      "c": [
+        2,
+        0
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        9
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        1,
+        0
+      ],
+      "h": [
+        2,
+        0
+      ],
+      "i": [
+        2,
+        5
+      ]
+    },
+    "humanTrio": [
+      "e9f",
+      "f9i",
+      "a1d"
+    ],
+    "defensible": false,
+    "savingTrio": null,
+    "strike": 9,
+    "garrison": 5,
+    "materialHuman": 13,
+    "materialBot": 8
+  },
+  {
+    "game": "5071df81",
+    "round": 6,
+    "board": {
+      "a": [
+        1,
+        6
+      ],
+      "b": [
+        1,
+        2
+      ],
+      "c": [
+        1,
+        0
+      ],
+      "d": [
+        1,
+        2
+      ],
+      "e": [
+        1,
+        0
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        2,
+        0
+      ],
+      "h": [
+        1,
+        2
+      ],
+      "i": [
+        2,
+        3
+      ]
+    },
+    "humanTrio": [
+      "h2i",
+      "a6b",
+      "b8e"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "i1f",
+      "f1c",
+      "c1b"
+    ],
+    "strike": 2,
+    "garrison": 3,
+    "materialHuman": 12,
+    "materialBot": 3
+  },
+  {
+    "game": "5071df81",
+    "round": 7,
+    "board": {
+      "a": [
+        1,
+        5
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        0
+      ],
+      "d": [
+        1,
+        2
+      ],
+      "e": [
+        1,
+        7
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        2,
+        0
+      ],
+      "h": [
+        2,
+        0
+      ],
+      "i": [
+        2,
+        4
+      ]
+    },
+    "humanTrio": [
+      "e7h",
+      "h7i",
+      "a5b"
+    ],
+    "defensible": false,
+    "savingTrio": null,
+    "strike": 7,
+    "garrison": 4,
+    "materialHuman": 14,
+    "materialBot": 4
+  },
+  {
+    "game": "8fab2b18",
+    "round": 4,
+    "board": {
+      "a": [
+        1,
+        6
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        1
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        0
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        0,
+        0
+      ],
+      "h": [
+        1,
+        10
+      ],
+      "i": [
+        2,
+        6
+      ]
+    },
+    "humanTrio": [
+      "h10i",
+      "c1f",
+      "a6b"
+    ],
+    "defensible": false,
+    "savingTrio": null,
+    "strike": 10,
+    "garrison": 6,
+    "materialHuman": 17,
+    "materialBot": 6
+  },
+  {
+    "game": "936947ea",
+    "round": 5,
+    "board": {
+      "a": [
+        1,
+        3
+      ],
+      "b": [
+        1,
+        1
+      ],
+      "c": [
+        2,
+        1
+      ],
+      "d": [
+        2,
+        3
+      ],
+      "e": [
+        1,
+        7
+      ],
+      "f": [
+        2,
+        3
+      ],
+      "g": [
+        2,
+        0
+      ],
+      "h": [
+        2,
+        0
+      ],
+      "i": [
+        2,
+        6
+      ]
+    },
+    "humanTrio": [
+      "e7h",
+      "h7i",
+      "b1e"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "c1b",
+      "d1a",
+      "f2i"
+    ],
+    "strike": 7,
+    "garrison": 6,
+    "materialHuman": 11,
+    "materialBot": 13
+  },
+  {
+    "game": "9b7aac1c",
+    "round": 1,
+    "board": {
+      "a": [
+        1,
+        4
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        0,
+        0
+      ],
+      "d": [
+        2,
+        3
+      ],
+      "e": [
+        1,
+        0
+      ],
+      "f": [
+        1,
+        3
+      ],
+      "g": [
+        2,
+        0
+      ],
+      "h": [
+        2,
+        0
+      ],
+      "i": [
+        2,
+        4
+      ]
+    },
+    "humanTrio": [
+      "f3e",
+      "e3h",
+      "h3i"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "d1a",
+      "d1a",
+      "d1a"
+    ],
+    "strike": 3,
+    "garrison": 4,
+    "materialHuman": 7,
+    "materialBot": 7
+  },
+  {
+    "game": "a3a3ce36",
+    "round": 3,
+    "board": {
+      "a": [
+        1,
+        5
+      ],
+      "b": [
+        1,
+        1
+      ],
+      "c": [
+        1,
+        2
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        2,
+        2
+      ],
+      "f": [
+        1,
+        1
+      ],
+      "g": [
+        0,
+        0
+      ],
+      "h": [
+        2,
+        2
+      ],
+      "i": [
+        2,
+        3
+      ]
+    },
+    "humanTrio": [
+      "a3b",
+      "b4e",
+      "f1i"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "e1b",
+      "e1b",
+      "h1e"
+    ],
+    "strike": 2,
+    "garrison": 3,
+    "materialHuman": 9,
+    "materialBot": 7
+  },
+  {
+    "game": "a3a3ce36",
+    "round": 4,
+    "board": {
+      "a": [
+        1,
+        5
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        2
+      ],
+      "d": [
+        2,
+        0
+      ],
+      "e": [
+        1,
+        3
+      ],
+      "f": [
+        2,
+        2
+      ],
+      "g": [
+        0,
+        0
+      ],
+      "h": [
+        2,
+        2
+      ],
+      "i": [
+        2,
+        4
+      ]
+    },
+    "humanTrio": [
+      "a5d",
+      "e3h",
+      "h3i"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "f1c",
+      "f1c",
+      "i1f"
+    ],
+    "strike": 3,
+    "garrison": 4,
+    "materialHuman": 10,
+    "materialBot": 8
+  },
+  {
+    "game": "a3a3ce36",
+    "round": 7,
+    "board": {
+      "a": [
+        1,
+        6
+      ],
+      "b": [
+        1,
+        4
+      ],
+      "c": [
+        2,
+        1
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        2
+      ],
+      "f": [
+        2,
+        4
+      ],
+      "g": [
+        1,
+        0
+      ],
+      "h": [
+        1,
+        1
+      ],
+      "i": [
+        2,
+        4
+      ]
+    },
+    "humanTrio": [
+      "b4e",
+      "e6h",
+      "h8i"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "c1b",
+      "b1a",
+      "f3i"
+    ],
+    "strike": 4,
+    "garrison": 4,
+    "materialHuman": 13,
+    "materialBot": 9
+  },
+  {
+    "game": "a3a3ce36",
+    "round": 11,
+    "board": {
+      "a": [
+        1,
+        6
+      ],
+      "b": [
+        1,
+        2
+      ],
+      "c": [
+        2,
+        0
+      ],
+      "d": [
+        1,
+        8
+      ],
+      "e": [
+        1,
+        0
+      ],
+      "f": [
+        2,
+        1
+      ],
+      "g": [
+        1,
+        0
+      ],
+      "h": [
+        1,
+        7
+      ],
+      "i": [
+        2,
+        3
+      ]
+    },
+    "humanTrio": [
+      "h7i",
+      "b1c",
+      "b1e"
+    ],
+    "defensible": false,
+    "savingTrio": null,
+    "strike": 8,
+    "garrison": 3,
+    "materialHuman": 23,
+    "materialBot": 4
+  },
+  {
+    "game": "b0903521",
+    "round": 15,
+    "board": {
+      "a": [
+        1,
+        2
+      ],
+      "b": [
+        2,
+        2
+      ],
+      "c": [
+        2,
+        0
+      ],
+      "d": [
+        1,
+        2
+      ],
+      "e": [
+        2,
+        1
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        2,
+        2
+      ],
+      "h": [
+        2,
+        0
+      ],
+      "i": [
+        2,
+        7
+      ]
+    },
+    "humanTrio": [
+      "d2e",
+      "e2h",
+      "h2i"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "b1a",
+      "b1a",
+      "g1d"
+    ],
+    "strike": 2,
+    "garrison": 7,
+    "materialHuman": 4,
+    "materialBot": 12
+  },
+  {
+    "game": "b1af83d0",
+    "round": 4,
+    "board": {
+      "a": [
+        1,
+        6
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        0
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        5
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        1,
+        1
+      ],
+      "h": [
+        2,
+        1
+      ],
+      "i": [
+        2,
+        3
+      ]
+    },
+    "humanTrio": [
+      "g1h",
+      "e10h",
+      "h10i"
+    ],
+    "defensible": false,
+    "savingTrio": null,
+    "strike": 5,
+    "garrison": 3,
+    "materialHuman": 12,
+    "materialBot": 4
+  },
+  {
+    "game": "e251a0ac",
+    "round": 7,
+    "board": {
+      "a": [
+        1,
+        6
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        0
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        8
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        1,
+        0
+      ],
+      "h": [
+        2,
+        0
+      ],
+      "i": [
+        2,
+        5
+      ]
+    },
+    "humanTrio": [
+      "e8h",
+      "h8i",
+      "i3f"
+    ],
+    "defensible": false,
+    "savingTrio": null,
+    "strike": 8,
+    "garrison": 5,
+    "materialHuman": 14,
+    "materialBot": 5
+  },
+  {
+    "game": "e83bd976",
+    "round": 5,
+    "board": {
+      "a": [
+        1,
+        5
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        1
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        2
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        0,
+        0
+      ],
+      "h": [
+        2,
+        3
+      ],
+      "i": [
+        2,
+        3
+      ]
+    },
+    "humanTrio": [
+      "e2f",
+      "c1f",
+      "f1i"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "h1e",
+      "e1b",
+      "b1a"
+    ],
+    "strike": 2,
+    "garrison": 3,
+    "materialHuman": 8,
+    "materialBot": 6
+  },
+  {
+    "game": "e83bd976",
+    "round": 8,
+    "board": {
+      "a": [
+        1,
+        5
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        2,
+        0
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        0
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        0,
+        0
+      ],
+      "h": [
+        1,
+        5
+      ],
+      "i": [
+        2,
+        6
+      ]
+    },
+    "humanTrio": [
+      "h5i",
+      "a5b",
+      "b5e"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "i1f",
+      "f1c",
+      "c1b"
+    ],
+    "strike": 5,
+    "garrison": 6,
+    "materialHuman": 10,
+    "materialBot": 6
+  },
+  {
+    "game": "e83bd976",
+    "round": 9,
+    "board": {
+      "a": [
+        1,
+        3
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        2,
+        0
+      ],
+      "d": [
+        2,
+        1
+      ],
+      "e": [
+        1,
+        5
+      ],
+      "f": [
+        2,
+        0
+      ],
+      "g": [
+        0,
+        0
+      ],
+      "h": [
+        2,
+        0
+      ],
+      "i": [
+        2,
+        5
+      ]
+    },
+    "humanTrio": [
+      "a3d",
+      "e5h",
+      "h5i"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "d1a",
+      "i1f",
+      "f1i"
+    ],
+    "strike": 5,
+    "garrison": 5,
+    "materialHuman": 8,
+    "materialBot": 6
+  },
+  {
+    "game": "e83bd976",
+    "round": 11,
+    "board": {
+      "a": [
+        1,
+        4
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        2,
+        0
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        2,
+        1
+      ],
+      "f": [
+        1,
+        8
+      ],
+      "g": [
+        2,
+        2
+      ],
+      "h": [
+        2,
+        1
+      ],
+      "i": [
+        2,
+        5
+      ]
+    },
+    "humanTrio": [
+      "f8i",
+      "a1b",
+      "a1d"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "e1h",
+      "g2h",
+      "h4i"
+    ],
+    "strike": 8,
+    "garrison": 5,
+    "materialHuman": 12,
+    "materialBot": 9
+  },
+  {
+    "game": "eca9c9fe",
+    "round": 6,
+    "board": {
+      "a": [
+        1,
+        6
+      ],
+      "b": [
+        1,
+        0
+      ],
+      "c": [
+        1,
+        0
+      ],
+      "d": [
+        1,
+        0
+      ],
+      "e": [
+        1,
+        4
+      ],
+      "f": [
+        2,
+        1
+      ],
+      "g": [
+        1,
+        1
+      ],
+      "h": [
+        2,
+        0
+      ],
+      "i": [
+        2,
+        4
+      ]
+    },
+    "humanTrio": [
+      "g1h",
+      "e4h",
+      "h4i"
+    ],
+    "defensible": true,
+    "savingTrio": [
+      "f1c",
+      "c1b",
+      "b1a"
+    ],
+    "strike": 4,
+    "garrison": 4,
+    "materialHuman": 11,
+    "materialBot": 5
+  }
+]

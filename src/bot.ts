@@ -8,7 +8,7 @@
 // The search parameters below are no longer the prototype's: they were swept
 // against a frozen copy of that bot (test/eval/bot-baseline.ts). The 87%-over-
 // 300-games figure that used to sit here belonged to the argmax generation
-// (now frozen at test/eval/bot-argmax.ts); this bot measures 66% against that
+// (now frozen at test/eval/bot-argmax.ts); this bot measures 59% against that
 // same baseline, deliberately — see ADVERSARIAL_WEIGHT. The action-scorer
 // weights ARE still the prototype's — see the note above them.
 //
@@ -93,23 +93,36 @@ export const DENIAL_EVERY = 4;
 //   0.3      88%       67%        92%          42%          19%
 //   argmax   99%       88%       100%           —            4%
 //
-// 0.5 is the knee. Going lower buys back punishment of weak play and gives up
-// the property this rewrite exists for; going higher gives up more strength than
-// the safety is worth.
+// This was 0.5 for a generation, picked as the knee of the scripted columns.
+// The production record says those columns were the wrong thing to read: the bot
+// won 4 of the 17 decided games it played against real people while that pool
+// showed it at 75-100%. The humans beat it the way the exploiters do rather than
+// the way the scripted opponents do — 13 of the 17 opened with the identical
+// trio `a3b b3e e3f`, and they win by baiting a habit, not by out-searching
+// anything. On the real position 0deb12a4 r3 the bot answered `i4f` in 30 of 30
+// seeds, emptying its home onto a square the human vacates that same move. Only
+// the exploiter columns can see any of that; see test/bot.positions.test.ts.
 //
-// Confirmed at 0.5 over 50 games a cell (30 for the exploiter), against the
-// frozen argmax bot in the same run:
+// Re-measured 0.5 against 0.7 at 60 games a cell (80 for the head-to-heads),
+// against exploiters built on the *live* bot, which are stronger than the
+// frozen-scorer ones in the table above:
 //
-//               random  heuristic  baseline  rush  human(6,2)  stacker/turtle  exploiter
-//   this bot     100%      86%       72%     98%      92%           100%          33%
-//   argmax bot   100%      99%       88%     99%     100%           100%           4%
+//   q     exploiter  denial-expl  WORSE  heuristic  human(6,2)  baseline  argmax
+//   0.5      35%         60%       35%      78%        80%        63%      40%
+//   0.7      47%         47%       47%      75%        77%        59%      48%
 //
-// It also loses 30-70 head-to-head against that argmax bot. Both halves of that
-// are the same fact: a mixed strategy declines free value against an opponent
-// whose plan it already knows, in exchange for not handing free value to one
-// that has learned its habits. Only the last column is the human across the
-// board from you.
-export const ADVERSARIAL_WEIGHT = 0.5;
+// 0.7 is what ships. The two exploit axes matter more than their average and the
+// worse of them is the bot's real exposure, so trading a lopsided 35/60 for a
+// balanced 47/47 is worth the three points off the scripted columns and the four
+// off the head-to-head — all of which sit inside their own error bars, while the
+// exploiter move does not. It also gains 8 points head-to-head against the
+// frozen argmax bot, which is the most exploitable opponent in the pool.
+//
+// 0.85 was measured too and is worse on every column (46/63 exploiters, 63/70
+// scripted, at 24 games a cell). This knob is not monotonic — the 1.0 row above
+// already showed that — so do not extrapolate it in either direction without
+// re-measuring.
+export const ADVERSARIAL_WEIGHT = 0.7;
 export const MAX_TROOPS_PER_ACTION = 8;
 const MOVES_PER_ROUND = 3;
 
@@ -295,6 +308,33 @@ export function sampleTrio(
 }
 
 /**
+ * One step of the beeline: send `player`'s biggest stack a square closer to
+ * `dist`'s target, breaking ties toward the stack that is already nearer.
+ * Returns null when the player has nothing to move.
+ */
+function beelineMove(
+  plan: Board,
+  player: number,
+  dist: Record<string, number>
+): string | null {
+  const owned = plan.populatedSquaresOwned(player);
+  if (owned.length === 0) return null;
+  let from = owned[0];
+  for (const square of owned) {
+    const better =
+      plan.state[square].troopCount > plan.state[from].troopCount ||
+      (plan.state[square].troopCount === plan.state[from].troopCount &&
+        dist[square] < dist[from]);
+    if (better) from = square;
+  }
+  let to = plan.state[from].neighbors[0];
+  for (const neighbor of plan.state[from].neighbors) {
+    if (dist[neighbor] < dist[to]) to = neighbor;
+  }
+  return `${from}${plan.state[from].troopCount}${to}`;
+}
+
+/**
  * Deterministic beeline: each move, send the biggest stack one square closer to
  * the enemy home. The heuristic sampler never produces this — it spreads troops
  * — so without it in the opponent model the bot never has to answer the one
@@ -305,24 +345,222 @@ export function rushTrio(board: Board, player: number): string[] {
   const plan = board.clone();
   const moves: string[] = [];
   for (let i = 0; i < MOVES_PER_ROUND; i++) {
+    const moveString = beelineMove(plan, player, dist);
+    if (moveString === null) {
+      moves.push(PASS_MOVE[player]);
+      continue;
+    }
+    plan.applyPlannedMove(new Move(moveString), player);
+    moves.push(moveString);
+  }
+  return moves;
+}
+
+/**
+ * The long way in: step a stack adjacent to the enemy home *off* that square,
+ * then come at the home from the other side.
+ *
+ * This is the plan that beats this bot, found by a human twice in one game and
+ * visible all over the production log. Against a stack sitting next to its home
+ * the bot's best-scoring reply is to empty the garrison onto it — `i4f` at 4.32
+ * on a board where `f` held 3 and `i` held 4. Both moves resolve at once, so if
+ * the stack has already left, that attack captures an empty square and the home
+ * is left on zero with two moves still to play. The stack walks back in via the
+ * *other* neighbour of the home and takes it:
+ *
+ *   f3e e3h h3i     and, mirrored,     h2e e2f f2i
+ *
+ * No generator here can express it. `rushTrio` takes the short path and enters
+ * the home immediately; `scoredActions` pays ADVANCE_WEIGHT for closing distance,
+ * so the first move of this line — stepping *away* from the home — is scored as
+ * a retreat and never sampled. The oracle can only best-respond with a trio some
+ * generator emitted, which is why widening the search never found the answer.
+ *
+ * It goes to both sides. In the opponent model so the bot stops believing its
+ * garrison can safely leave home to take a square (`denialTrio` is in the model
+ * for the same reason and measured *worse than nothing* when it was left out of
+ * one side), and in the bot's own pool so it can play the line too.
+ *
+ * Ties go to the neighbour with the most exits — the middle of a 9-square board
+ * is what keeps both approaches open, and committing to a corner hands the
+ * defender the guess back.
+ *
+ * What it is worth, on the four recorded positions where a human ran this line,
+ * 40 seeds each — "held" is the bot still owning its home at the end of the
+ * round, "emptied" is it shipping the whole garrison out on the first move:
+ *
+ *   position            held before   held after   emptied before   after
+ *   live game r1            0/40         39/40         37/40         1/40
+ *   live game r3           12/40         14/40         16/40        12/40
+ *   D1 0deb12a4 r3          0/40         37/40         37/40         4/40
+ *   D1 9b7aac1c r1          0/40         40/40         39/40         2/40
+ *
+ * And across the pool, 60 games a cell, against the build before it:
+ *
+ *   column              before   after
+ *   exploiter             47%     43%
+ *   denial-exploiter      47%     53%
+ *   heuristic             75%     93%
+ *   human(6,2)            77%     97%
+ *   pre-tuning bot        59%     85%
+ *   real positions        62%     74%
+ *
+ * Note which way that reads. Four earlier attempts at this file bought scripted
+ * strength and paid for it against the two opponents that adapt — the fan-out
+ * generator went +18/+15 scripted and -21/-34 adaptive, and was reverted. This
+ * one leaves both adaptive columns where they were, inside their own error bars
+ * and moving in opposite directions, because it is not making the bot greedier.
+ * It is filling a hole in the model: the plan existed, both sides can now see it,
+ * and the equilibrium accounts for it.
+ */
+export function flankTrio(board: Board, player: number): string[] {
+  const dist = DIST_TO_ENEMY_HOME[player];
+  const enemyHome = player === 1 ? "i" : "a";
+  const plan = board.clone();
+  const moves: string[] = [];
+  // Where the walking stack stands, and the square it just left — the second is
+  // what it must not step back onto.
+  let carrying: string | null = null;
+  let previous: string | null = null;
+
+  for (let i = 0; i < MOVES_PER_ROUND; i++) {
     const owned = plan.populatedSquaresOwned(player);
     if (owned.length === 0) {
       moves.push(PASS_MOVE[player]);
       continue;
     }
-    let from = owned[0];
-    for (const square of owned) {
-      const better =
-        plan.state[square].troopCount > plan.state[from].troopCount ||
-        (plan.state[square].troopCount === plan.state[from].troopCount &&
-          dist[square] < dist[from]);
-      if (better) from = square;
+    // Keep walking the stack this trio picked up; before it has moved, take the
+    // biggest one that can still reach the home inside the round.
+    let from: string;
+    if (carrying !== null && owned.includes(carrying)) {
+      from = carrying;
+    } else {
+      const reachable = owned.filter((s) => dist[s] <= MOVES_PER_ROUND - i);
+      const pool: string[] = reachable.length > 0 ? reachable : owned;
+      from = pool[0];
+      for (const square of pool) {
+        const better =
+          plan.state[square].troopCount > plan.state[from].troopCount ||
+          (plan.state[square].troopCount === plan.state[from].troopCount &&
+            dist[square] < dist[from]);
+        if (better) from = square;
+      }
+      previous = null;
     }
-    let to = plan.state[from].neighbors[0];
-    for (const neighbor of plan.state[from].neighbors) {
-      if (dist[neighbor] < dist[to]) to = neighbor;
+
+    const neighbors: string[] = plan.state[from].neighbors;
+    // Only decline the home on the opening move, and only when a detour still
+    // arrives: stepping aside spends one of the three moves.
+    const detour =
+      i === 0 &&
+      neighbors.includes(enemyHome) &&
+      neighbors.some(
+        (n) => n !== enemyHome && dist[n] <= MOVES_PER_ROUND - 1
+      );
+    const options = neighbors.filter(
+      (n) => n !== previous && (!detour || n !== enemyHome)
+    );
+    const usable: string[] = options.length > 0 ? options : neighbors;
+
+    let to: string = usable[0];
+    for (const n of usable) {
+      const closer = dist[n] < dist[to];
+      const tied = dist[n] === dist[to];
+      // More exits is a better staging square: it leaves both approaches live.
+      const roomier =
+        plan.state[n].neighbors.length > plan.state[to].neighbors.length;
+      if (closer || (tied && roomier)) to = n;
     }
+
     const moveString = `${from}${plan.state[from].troopCount}${to}`;
+    plan.applyPlannedMove(new Move(moveString), player);
+    moves.push(moveString);
+    previous = from;
+    carrying = to;
+  }
+  return moves;
+}
+
+/**
+ * The beeline pointed the other way: mass troops onto our *own* home and take it
+ * back, then carry on at the enemy once it is ours again.
+ *
+ * Everything else in this file is oriented at the enemy home. `scoredActions`
+ * scores a move by the distance it closes on it, so a move toward our own home
+ * is scored as a retreat, and `rushTrio` walks the biggest stack the wrong way
+ * entirely. While the home stands that is exactly right. Once it falls it leaves
+ * the bot with no plan that goes back, and the search cannot pick one that no
+ * generator emitted.
+ *
+ * That only bites because the engine needs *strictly* more troops than the
+ * defender to flip a square (see Board.applyMove): a 3-stack bouncing off a home
+ * held by 3 leaves it enemy-owned and empty, so retaking generally costs two
+ * moves — merge, then storm — and no single-move scorer will ever propose the
+ * first of them. Observed in a real game at `aH8 bB1 cB0 dH0 eB3 fB3 g.0 hH0
+ * iH3`: `f3i` was the top-scored action at 4.54 and bounced, while `e3f f6i`
+ * takes the home and appeared in none of a dozen sampled plans, because `e3f`
+ * scores -0.96.
+ *
+ * Deterministic, like rushTrio, and it collapses to rushTrio whenever the home
+ * is already ours — `dedupe` in candidateTrios drops the copy.
+ */
+export function reclaimTrio(board: Board, player: number): string[] {
+  const home = HOME_SQUARE[player];
+  const attack = DIST_TO_ENEMY_HOME[player];
+  // Our distance to our own home is the opponent's distance to the home they
+  // attack, which is the same table read from the other side.
+  const retreat = DIST_TO_ENEMY_HOME[player === 1 ? TEAM_2 : TEAM_1];
+  const plan = board.clone();
+  const moves: string[] = [];
+
+  for (let i = 0; i < MOVES_PER_ROUND; i++) {
+    let moveString: string | null = null;
+
+    if (plan.state[home].owner !== player) {
+      const garrison = plan.state[home].troopCount;
+      const outside = plan
+        .populatedSquaresOwned(player)
+        .filter((square) => square !== home);
+      // Strictly more than the defender, or the square does not change hands.
+      const stormable = outside.filter(
+        (square) =>
+          retreat[square] === 1 && plan.state[square].troopCount > garrison
+      );
+      if (stormable.length > 0) {
+        const from = stormable.reduce((a, b) =>
+          plan.state[b].troopCount > plan.state[a].troopCount ? b : a
+        );
+        moveString = `${from}${plan.state[from].troopCount}${home}`;
+      } else {
+        // Nothing can take it yet, so consolidate: walk the biggest stack that
+        // can still reach home this round one square closer, which merges it
+        // with whatever is already waiting there. Ties go to the *farther*
+        // stack, since the near one is what it is merging into.
+        const movable = outside.filter(
+          (square) => retreat[square] <= MOVES_PER_ROUND - i
+        );
+        if (movable.length > 0) {
+          const from = movable.reduce((a, b) => {
+            const bigger = plan.state[b].troopCount > plan.state[a].troopCount;
+            const tied = plan.state[b].troopCount === plan.state[a].troopCount;
+            return bigger || (tied && retreat[b] > retreat[a]) ? b : a;
+          });
+          let to = plan.state[from].neighbors[0];
+          for (const neighbor of plan.state[from].neighbors) {
+            if (retreat[neighbor] < retreat[to]) to = neighbor;
+          }
+          moveString = `${from}${plan.state[from].troopCount}${to}`;
+        }
+      }
+    }
+
+    // Home is ours, or nothing can be sent at it: spend the slot the way
+    // rushTrio would.
+    if (moveString === null) moveString = beelineMove(plan, player, attack);
+    if (moveString === null) {
+      moves.push(PASS_MOVE[player]);
+      continue;
+    }
     plan.applyPlannedMove(new Move(moveString), player);
     moves.push(moveString);
   }
@@ -540,8 +778,17 @@ function candidateTrios(
   const trios: string[][] = [
     sampleTrio(board, player, rand, 1),
     rushTrio(board, player),
+    flankTrio(board, player),
     denialTrio(board, player, rand, true),
   ];
+  // Only when there is a home to win back. With the home standing reclaimTrio
+  // *is* rushTrio, so adding it unconditionally would buy a duplicate and shift
+  // every index below it — moving the DENIAL_EVERY cadence and the RNG stream in
+  // every position on the board to fix one the bot only reaches after its home
+  // has already fallen.
+  if (board.state[HOME_SQUARE[player]].owner !== player) {
+    trios.push(reclaimTrio(board, player));
+  }
   for (let i = trios.length; i < count; i++) {
     trios.push(
       i % DENIAL_EVERY === 0

@@ -64,6 +64,149 @@ tell two strong bots apart. The scripted opponents saturate. They attack
 different things — one guesses the bot's plan, the other empties the square it is
 about to move from — so read the worse of the two as the bot's exposure.
 
+### Real positions
+
+Everything above is the bot against code. `test/bot.positions.test.ts` gates it
+against people: `test/fixtures/loss-positions.json` holds 27 boards taken from
+the play-against-bot games in production D1 — every round where the human's trio
+actually put troops onto a bot-held `i` — each with the human's real trio for
+that round. Regenerate it with `test/eval/extract-positions.ts` as games
+accumulate; the header there has the `wrangler d1` commands, including the
+account id, which is **not** the one in `wrangler.toml`.
+
+Prefer this to inventing an opponent. The deployed bot won 4 of the 17 decided
+games it played against real people while the scripted pool showed it at
+75-100%, and hand-written imitations of human play all saturate — a scripted
+approximation of a human is a much weaker opponent than the human.
+
+What the 22 games say. Of the 27 attacks on a home the bot still held, 10 were
+held, 10 arrived with more troops than the garrison had at the *start of the
+round*, and 7 were the bot emptying a home that would otherwise have survived.
+Those seven are the bait described below, and they are the single largest
+identified cause of losing the home.
+
+Measure that split at the round start, not at the moment of impact. Counting the
+garrison as it stood when the killing move landed reads 15 outnumbered and 1
+self-inflicted, which is wrong in the most misleading direction available: in the
+bait line the home is empty precisely *because* the bot left two moves earlier in
+the same round, so its own mistake gets recorded as an opposing stack being too
+big. That mistake sent the first day of work here after an economy problem.
+
+The other half is real. A stack that genuinely outnumbers the garrison is visible
+a round ahead — the fixture's `strike`/`garrison` columns, where
+`strike > garrison` held at 28% of round-starts in the games it lost and 2% of
+the ones it won — and it sits two squares out rather than adjacent, because a
+trio is three moves and the human assembles and strikes inside one round.
+Upstream of that is territory: in the games it lost the bot held 3.2-3.6 squares
+to the human's 4.5-5.5 from round 2 on, and restock pays per square owned.
+
+Seventeen of the 27 are marked `defensible` — an exhaustive depth-3 search proves
+some bot trio holds the home. The other 10 are already lost on arrival (the bot
+reaches them with 6.2 material against 15.1) and gating them would be gating the
+impossible; the test reports them without a floor.
+
+**Four changes aimed at that analysis were tried and reverted**, and the shape of
+the failure is worth more than any of them would have been. Each made the bot
+stronger against opponents that do not adapt and weaker against the two that do:
+
+```
+                        heuristic  human(6,2)  exploiter  denial-expl  hold rate
+  baseline                  75         78          42          67        64%
+  full-strength threat      80         80          33          33        62%
+  marginal home deficit     78         83          29          50        61%
+  INCOME_WEIGHT 14          83         83          46          63        63%
+  fan-out generator         93         93          21          33        57%
+```
+
+The last one is the clearest: +18/+15 against scripted play, -21/-34 against
+adaptive. Re-weighting the evaluation is not what costs this bot games against
+people, and a change that only moves the scripted columns is not evidence of
+anything. Real humans are on the adaptive side of that table — 13 of the 17
+decided games opened with the identical trio `a3b b3e e3f`, and they win by
+baiting a habit rather than by out-searching anything.
+
+### The bait, and the flank
+
+What the bot was actually losing to, found by playing it and then confirmed all
+over the production log. Put a stack on `f` or `h`, next to the bot's home. Its
+best-scoring reply is to empty the garrison onto that stack — `i4f` at 4.32 on a
+board where `f` held 3 and `i` held 4, played in 30 of 30 seeds. Both sides move
+at once, so if the stack has already stepped aside the attack captures an empty
+square and leaves the home on zero with two moves still to play. The stack walks
+back in through the home's *other* neighbour:
+
+```
+  f3e e3h h3i        and, mirrored,        h2e e2f f2i
+```
+
+Nothing in this file could produce that. `rushTrio` takes the short path and
+enters the home immediately, and `scoredActions` pays `ADVANCE_WEIGHT` for
+closing distance, so the first move — stepping *away* from the home — scores as a
+retreat and is never sampled. The oracle can only best-respond with a trio some
+generator emitted, which is why more search never found the answer. `flankTrio`
+is that plan, and it goes to both sides: into the opponent model so the bot stops
+believing its garrison can safely leave, and into its own pool so it can play the
+line itself.
+
+On the four recorded positions where a human ran it, 40 seeds each:
+
+```
+  position            held before   held after   emptied home before   after
+  live game r1            0/40         39/40           37/40           1/40
+  live game r3           12/40         14/40           16/40          12/40
+  D1 0deb12a4 r3          0/40         37/40           37/40           4/40
+  D1 9b7aac1c r1          0/40         40/40           39/40           2/40
+```
+
+And across the pool, 60 games a cell:
+
+```
+  column              before   after
+  exploiter             47%     43%
+  denial-exploiter      47%     53%
+  heuristic             75%     93%
+  human(6,2)            77%     97%
+  pre-tuning bot        59%     85%
+  real positions        62%     74%
+```
+
+Which is the opposite shape to the four reverted attempts above. Both adaptive
+columns stay where they were — inside their error bars, moving in opposite
+directions — while everything else rises, because this is not the bot being
+greedier. It is a hole in the model being filled: the plan already existed, both
+sides can now see it, and the equilibrium prices it.
+
+### Winning the home back
+
+One thing the bot genuinely could not do, found by playing it rather than by
+measuring it: once its home fell it would drift, and never take it back.
+
+The engine needs *strictly* more troops than the defender to flip a square
+(`Board.applyMove`), so a 3-stack bouncing off a home held by 3 leaves it
+enemy-owned and empty. Retaking usually costs two moves — merge, then storm —
+and every generator in `src/bot.ts` is pointed at the *enemy* home, so the merge
+step scores as a retreat and no generator would ever emit it. The search cannot
+pick a plan nothing produced. `reclaimTrio` is that plan; it is gated on the home
+actually having fallen, because with the home standing it *is* `rushTrio`, and
+adding a duplicate would shift the `DENIAL_EVERY` cadence and the RNG stream in
+every position on the board.
+
+Recapture rate over 30 seeds a position, before and after:
+
+```
+  position                                 before   after
+  from a real game, e3 + f3 vs garrison 3    3/30   20/30
+  same shape, nothing else on the board      3/30   18/30
+  one stack already big enough              28/30   30/30
+  troops split across f and h               17/30   20/30
+  troops three hops out                      0/30    3/30
+  garrison 9, two 3-stacks (impossible)      0/30    0/30
+```
+
+The pool columns are unchanged to within a point (exploiter 47->48, denial 47->48,
+heuristic 75->75, human 77->77 over 60 games a cell), which is what the gating
+predicts: it is inert until the home is lost.
+
 ## Development
 
 ```shell

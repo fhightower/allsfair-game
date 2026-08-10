@@ -14,6 +14,26 @@
 // to opponents that never punish it — not that it got weaker. Raising these
 // floors by making the bot greedier would undo that. See ADVERSARIAL_WEIGHT and
 // DENIAL_EVERY in src/bot.ts for the swept curves.
+//
+// Every floor here is derived from the measured rate at that gate's own sample
+// size, ~3 sigma under, and has to be redone whenever a change moves the rates.
+// Skipping that once already cost a mystery failure: ADVERSARIAL_WEIGHT 0.7 took
+// three rates down ~15 points, the floors stayed put at one-and-a-half sigma, and
+// a full run had a 20% chance of failing on noise alone. `flankTrio` then took
+// the scripted rates up ~20, so they are derived again here:
+//
+//   gate               rate   n    floor   sigma under
+//   random             100%   30    0.90       —
+//   heuristic           93%   30    0.75      3.9
+//   pre-tuning bot      85%   30    0.60      3.8
+//   human(6,2)          97%   30    0.80      5.5
+//   exploiter           43%   20    0.12      2.8
+//   source-denial       53%   20    0.20      3.0
+//
+// Lowering a floor after a change is how a regression gets hidden, so read the
+// rates rather than the floors: those come from 60-80 game runs (see the table
+// on ADVERSARIAL_WEIGHT), and the floors are only what keeps a 20- or 30-game
+// sample from failing on variance. A real regression shows up in the rate.
 import { describe, expect, it } from "vitest";
 import {
   baselineBot,
@@ -41,14 +61,15 @@ describe("bot strength gates", () => {
 
   it("beats the greedy heuristic", { timeout: 120_000 }, () => {
     const tally = sweep(heuristicBot, searchBot, GAMES);
-    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.6); // measured 78%
+    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.75); // measured 93%
   });
 
   it("beats the pre-tuning bot", { timeout: 120_000 }, () => {
     const tally = sweep(baselineBot, searchBot, GAMES);
-    // Floors here sit ~2 sigma under the measured rate at this gate's sample
-    // size, so they catch a real regression without failing on noise.
-    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.5); // measured 66%
+    // 85%, up from 59% before `flankTrio` — the flank is a plan the frozen bot
+    // has no answer to, and it is now in this bot's own pool as well as in its
+    // model of the opponent.
+    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.6); // measured 85%
   });
 
   // The line a human used to beat the shipped bot: trade pieces off, bank
@@ -56,7 +77,7 @@ describe("bot strength gates", () => {
   // of these; this gate is what stops that regressing.
   it("beats trade-then-bank-then-march", { timeout: 120_000 }, () => {
     const tally = sweep(makeHumanLike(6, 2), searchBot, GAMES);
-    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.65); // measured 80%
+    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.8); // measured 97%
   });
 
   // The gate that matters, and the one no scripted opponent can enforce: an
@@ -67,17 +88,24 @@ describe("bot strength gates", () => {
   // it is expensive per game, so it runs few of them and the variance is large.
   it("is not trivially exploitable", { timeout: 300_000 }, () => {
     const tally = sweep(exploiterBot, searchBot, EXPLOITER_GAMES);
-    // 35% is the real rate over 40 games, so this floor is deliberately far
+    // 43% is the real rate over 60 games, so this floor is deliberately far
     // below it: at 20 games one sigma is ~11 points, and a floor near the mean
     // would fail on noise. It is a collapse detector — a bot that reverted to a
     // pure strategy scores ~4% here.
-    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.12); // measured 35%
+    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.12); // measured 43%
   });
 
   // The second exploit axis, and the one the gate above could not see: empty the
   // square the bot is about to move from and it plays one move against three. A
   // human found this on a bot that scored 33% above, which is why both axes are
   // gated separately — the bot's real exposure is the worse of the two.
+  //
+  // The two axes traded places at ADVERSARIAL_WEIGHT 0.7: this one fell from 60%
+  // to 48% while the gate above rose from 35% to 48%, which is the whole point
+  // of that change and the reason to read them together rather than one at a
+  // time. `flankTrio` then left both alone (43% / 53%, against 47% / 47%) while
+  // taking every other column up. Measured over 60 games; see the tables on
+  // ADVERSARIAL_WEIGHT and flankTrio.
   //
   // Read this floor as loose. Like `heuristicBot`, this exploiter is built on the
   // frozen baseline scorer and evaluation so that tuning src/bot.ts cannot move
@@ -87,6 +115,6 @@ describe("bot strength gates", () => {
   // 25% there); this gate only catches a collapse.
   it("is not trivially exploitable by source-denial", { timeout: 300_000 }, () => {
     const tally = sweep(denialExploiterBot, searchBot, EXPLOITER_GAMES);
-    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.35); // measured 60%
+    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.2); // measured 53%
   });
 });
