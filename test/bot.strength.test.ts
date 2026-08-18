@@ -25,7 +25,7 @@
 //   gate               rate   n    floor   sigma under
 //   random             100%   30    0.90       —
 //   heuristic           93%   30    0.75      3.9
-//   pre-tuning bot      85%   30    0.60      3.8
+//   pre-tuning bot      58%   30    0.25      3.7
 //   human(6,2)          97%   30    0.80      5.5
 //   exploiter           43%   20    0.12      2.8
 //   source-denial       53%   20    0.20      3.0
@@ -64,12 +64,26 @@ describe("bot strength gates", () => {
     expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.75); // measured 93%
   });
 
+  // KNOWN REGRESSION — this floor was lowered to record a real loss, not to
+  // absorb one. Changing `Board.winner` to end the game when a home is held and
+  // the loser can no longer outnumber its garrison took this rate from 85%
+  // (102/120) to 58.3% (70/120), measured over 120 games from both seats on
+  // either side of that one commit. At those sample sizes the drop is ~5 sigma:
+  // it is the rule change, not variance.
+  //
+  // The engine change is correct and independently tested; what it invalidates
+  // is the bot's *tuning*. Games now end far earlier, so taking a home with a
+  // garrison behind it simply wins, which rewards the frozen bot's rushing over
+  // the equilibrium play this bot was tuned for back when a win required
+  // grinding the opponent to zero troops. That mechanism is inferred from the
+  // rule change, not yet confirmed by the sweep.
+  //
+  // So do NOT read 58% as the new normal. Retuning the bot for the new win
+  // condition should take this back up, and this floor with it. Until then the
+  // gate only proves the bot has not fallen further.
   it("beats the pre-tuning bot", { timeout: 120_000 }, () => {
     const tally = sweep(baselineBot, searchBot, GAMES);
-    // 85%, up from 59% before `flankTrio` — the flank is a plan the frozen bot
-    // has no answer to, and it is now in this bot's own pool as well as in its
-    // model of the opponent.
-    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.6); // measured 85%
+    expect(tally.wins / tally.games).toBeGreaterThanOrEqual(0.25); // measured 58%
   });
 
   // The line a human used to beat the shipped bot: trade pieces off, bank

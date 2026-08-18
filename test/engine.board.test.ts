@@ -86,6 +86,40 @@ describe("winner and restock", () => {
     expect(board.winner).toBe(1);
   });
 
+  it("declares team 2 winner when team 1 holds fewer troops than the garrison in its taken home", () => {
+    const board = new Board();
+    board.state.a = { ...board.state.a, owner: 2, troopCount: 4 };
+    board.state.d = { ...board.state.d, owner: 1, troopCount: 2 };
+    board.state.g = { ...board.state.g, owner: 1, troopCount: 1 };
+    // 3 troops cannot outnumber a garrison of 4, and a team whose home is held
+    // gets no restock, so the gap can never close.
+    expect(board.winner).toBe(2);
+  });
+
+  it("declares team 1 winner when team 2 holds fewer troops than the garrison in its taken home", () => {
+    const board = new Board();
+    board.state.i = { ...board.state.i, owner: 1, troopCount: 4 };
+    board.state.f = { ...board.state.f, owner: 2, troopCount: 2 };
+    board.state.h = { ...board.state.h, owner: 2, troopCount: 1 };
+    expect(board.winner).toBe(1);
+  });
+
+  it("declares no winner while the loser still outnumbers the garrison", () => {
+    const board = new Board();
+    board.state.a = { ...board.state.a, owner: 2, troopCount: 4 };
+    board.state.d = { ...board.state.d, owner: 1, troopCount: 2 };
+    board.state.g = { ...board.state.g, owner: 1, troopCount: 3 };
+    // g3d then d5a retakes the home.
+    expect(board.winner).toBe(0);
+  });
+
+  it("declares no winner when the taken home was left empty", () => {
+    const board = new Board();
+    board.state.a = { ...board.state.a, owner: 2, troopCount: 0 };
+    board.state.d = { ...board.state.d, owner: 1, troopCount: 1 };
+    expect(board.winner).toBe(0);
+  });
+
   it("restocks home squares by number of owned squares", () => {
     const board = new Board();
     board.applyMovePair(pair("a1b", "i1h"));

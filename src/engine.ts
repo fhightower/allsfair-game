@@ -273,15 +273,43 @@ export class Board {
       .map(([name]) => name);
   }
 
+  private troopsHeld(team: number): number {
+    let total = 0;
+    for (const node of Object.values(this.state)) {
+      if (node.owner === team) total += node.troopCount;
+    }
+    return total;
+  }
+
+  /**
+   * A team loses once its home is held and it can no longer buy the home back.
+   *
+   * Flipping a square costs strictly more than what defends it (`applyMove`
+   * only changes the owner when the subtraction goes negative), so retaking the
+   * home costs more troops than its garrison. A team whose home is held is paid
+   * no restock, so its troop total only ever shrinks. A total at or below the
+   * garrison is therefore not "not yet" -- it is never, however the remaining
+   * troops are arranged or however many rounds are left.
+   *
+   * Team 2's home is tested first: when a move pair takes both homes at once,
+   * team 1 wins.
+   */
   get winner(): number {
-    const team1BaseTaken = this.state[TEAM_1_HOME_SQUARE].owner === TEAM_2;
-    const team2BaseTaken = this.state[TEAM_2_HOME_SQUARE].owner === TEAM_1;
+    const team1Home = this.state[TEAM_1_HOME_SQUARE];
+    const team2Home = this.state[TEAM_2_HOME_SQUARE];
 
-    const team1SquaresOwned = this.populatedSquaresOwned(TEAM_1).length;
-    const team2SquaresOwned = this.populatedSquaresOwned(TEAM_2).length;
-
-    if (team2BaseTaken && team2SquaresOwned === 0) return TEAM_1;
-    if (team1BaseTaken && team1SquaresOwned === 0) return TEAM_2;
+    if (
+      team2Home.owner === TEAM_1 &&
+      this.troopsHeld(TEAM_2) <= team2Home.troopCount
+    ) {
+      return TEAM_1;
+    }
+    if (
+      team1Home.owner === TEAM_2 &&
+      this.troopsHeld(TEAM_1) <= team1Home.troopCount
+    ) {
+      return TEAM_2;
+    }
     return 0;
   }
 
