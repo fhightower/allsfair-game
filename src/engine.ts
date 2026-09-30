@@ -39,8 +39,8 @@ const ADJACENCY: BoardState = startingBoardState();
  * Copies board state, preserving key order (a..i drives the HTML layout).
  *
  * `neighbors` is shared rather than copied: the adjacency of a square never
- * changes, and this runs hundreds of times per bot turn, where structuredClone
- * was the single largest cost. Nothing may mutate a `neighbors` array.
+ * changes, and copying it was the single largest cost of a clone. Nothing may
+ * mutate a `neighbors` array.
  */
 function cloneState(state: BoardState): BoardState {
   const copy: BoardState = {};
@@ -135,12 +135,6 @@ export class Board {
   state: BoardState;
   startingState: BoardState;
   history: HistoryEntry[];
-  /**
-   * Planning clones are simulated, never rendered, so they skip history
-   * bookkeeping — snapshotting every move pair of every simulated round is
-   * pure waste in the bot's search loop.
-   */
-  private recordsHistory = true;
 
   constructor() {
     this.state = startingBoardState();
@@ -224,7 +218,6 @@ export class Board {
   }
 
   private snapshot(moves: MovePair): void {
-    if (!this.recordsHistory) return;
     this.history.unshift({
       state: cloneState(this.state),
       team1MoveStr: moves.team1Move.toString(),
@@ -326,26 +319,5 @@ export class Board {
     if (this.state[TEAM_2_HOME_SQUARE].owner === TEAM_2) {
       this.state[TEAM_2_HOME_SQUARE].troopCount += team2SquaresOwned;
     }
-  }
-
-  /** Game-state clone for bot planning: copied state, no history recording. */
-  clone(): Board {
-    const copy = new Board();
-    copy.state = cloneState(this.state);
-    copy.recordsHistory = false;
-    return copy;
-  }
-
-  /**
-   * Apply a single team's move outside pair resolution (bot planning only):
-   * no-op unless the team owns a populated start square; clamps troops to
-   * what the square holds, then standard move/attack semantics.
-   */
-  applyPlannedMove(move: Move, team: number): void {
-    const start = this.state[move.start];
-    if (start.owner !== team || start.troopCount <= 0) return;
-    move.troopCount = Math.min(move.troopCount, start.troopCount);
-    start.troopCount -= move.troopCount;
-    this.applyMove(move, team);
   }
 }

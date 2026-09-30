@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "test": "NODE_OPTIONS=--experimental-sqlite vitest run",
-    "serve": "NODE_OPTIONS=--experimental-sqlite tsx test/eval/serve.ts",
+    "build:bot": "esbuild src/bot/browser.ts --bundle --format=iife --global-name=AllsfairBot --minify --target=es2022 --outfile=public/bot.js",
+    "serve": "npm run build:bot && NODE_OPTIONS=--experimental-sqlite tsx test/serve.ts",
+    "tournament": "NODE_OPTIONS=--experimental-sqlite tsx test/tournament.ts",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "npm run build:bot && wrangler deploy"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",
@@ -14,6 +16,7 @@
     "tsx": "^4.20.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "wrangler": "^4.107.0"
+    "wrangler": "^4.107.0",
+    "esbuild": "^0.28.1"
   }
 }

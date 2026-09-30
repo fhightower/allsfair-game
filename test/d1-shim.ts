@@ -4,8 +4,8 @@
 // is implemented. Real D1 behavior is verified by the deploy smoke test.
 //
 // One class of bug it cannot surface: node:sqlite is synchronous, so the
-// count-guarded writes in `writeBotMoveIfCountMatches` can never actually
-// interleave here. Concurrency behaviour has to be checked against real D1.
+// conditional writes in src/db.ts can never actually interleave here.
+// Concurrency behaviour has to be checked against real D1.
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";

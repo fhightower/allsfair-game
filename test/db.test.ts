@@ -2,12 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   claimPlayer2Slot,
   GameNotFound,
-  getMlRoundContext,
   getBoardAndRoundState,
   getGameByGuid,
   getMovesForGuid,
   saveMove,
-  writeBotMoveIfCountMatches,
   writeGame,
   writeMove,
 } from "../src/db";
@@ -77,51 +75,5 @@ describe("moves and round state", () => {
     expect(rs.p1Count).toBe(1);
     expect(rs.p2Count).toBe(0);
     expect(rs.roundComplete).toBe(false);
-  });
-});
-
-describe("getMlRoundContext", () => {
-  it("returns a fresh board and partial bot moves for round 0", async () => {
-    for (const m of ["a1b", "a1d", "b1e"]) {
-      await writeMove(db, "g-ml", new Move(m), 1);
-    }
-    for (const m of ["i1h", "i1f"]) {
-      await writeMove(db, "g-ml", new Move(m), 2);
-    }
-    const ctx = await getMlRoundContext(db, "g-ml", 0);
-    expect(ctx.board.state.a.troopCount).toBe(3); // round-start = untouched
-    expect(ctx.botMovesInRound).toEqual(["i1h", "i1f"]);
-  });
-
-  it("replays prior rounds for round 1", async () => {
-    for (const m of ["a1b", "a1d", "b1e"]) {
-      await writeMove(db, "g-ml2", new Move(m), 1);
-    }
-    for (const m of ["i1h", "i1f", "h1e"]) {
-      await writeMove(db, "g-ml2", new Move(m), 2);
-    }
-    const ctx = await getMlRoundContext(db, "g-ml2", 1);
-    // round 0 replayed incl. restock; pair 3 (b1e vs h1e) equal-collides
-    expect(ctx.board.state.a.troopCount).toBe(4);
-    expect(ctx.board.state.i.troopCount).toBe(4);
-    expect(ctx.botMovesInRound).toEqual([]);
-  });
-});
-
-describe("writeBotMoveIfCountMatches", () => {
-  it("inserts only when the player-2 move count matches", async () => {
-    expect(await writeBotMoveIfCountMatches(db, "g-b", "i1h", 0)).toBe(true);
-    // stale expectation (another writer won): no insert
-    expect(await writeBotMoveIfCountMatches(db, "g-b", "i1f", 0)).toBe(false);
-    expect(await writeBotMoveIfCountMatches(db, "g-b", "i1f", 1)).toBe(true);
-    expect(await getMovesForGuid(db, "g-b")).toEqual([
-      { moveString: "i1h", player: 2 },
-      { moveString: "i1f", player: 2 },
-    ]);
-  });
-
-  it("counts only player-2 moves in the guard", async () => {
-    await writeMove(db, "g-c", new Move("a1b"), 1);
-    expect(await writeBotMoveIfCountMatches(db, "g-c", "i1h", 0)).toBe(true);
   });
 });

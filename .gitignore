@@ -1,3 +1,6 @@
 node_modules/
 .wrangler/
 *.db
+
+# Built by `npm run build:bot` from src/bot/.
+public/bot.js

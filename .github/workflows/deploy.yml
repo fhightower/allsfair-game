@@ -26,6 +26,12 @@ jobs:
 
       - run: npx tsc
 
+      # public/bot.js is gitignored: the browser bot is built from src/bot/ so
+      # that it and the worker share one copy of the rules. wrangler-action runs
+      # its own command rather than the deploy npm script, so the build has to be
+      # an explicit step here or the deployed page would 404 on /bot.js.
+      - run: npm run build:bot
+
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:

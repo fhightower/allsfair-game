@@ -256,20 +256,45 @@
             margin-left: 0.5rem;
         }
 
-        .mode-toggle {
-            margin-bottom: 0.9rem;
-            font-size: 0.9rem;
-            color: #bbb;
+        select {
+            background: #2a2a4a;
+            border: 1px solid #444;
+            color: #e0e0e0;
+            padding: 0.6rem 0.8rem;
+            border-radius: 6px;
+            font-size: 1rem;
+            width: 100%;
         }
-        .mode-toggle label {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            cursor: pointer;
+        select:focus {
+            outline: none;
+            border-color: #4a4ae8;
         }
-        .mode-toggle input {
-            accent-color: #4a4ae8;
+
+        .field-label {
+            display: block;
+            font-size: 0.85rem;
+            color: #aaa;
+            margin-bottom: 0.3rem;
         }
+
+        .bot-note {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 0.75rem;
+            line-height: 1.5;
+        }
+
+        .bot-summary {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #999;
+            margin-top: 0.5rem;
+        }
+        .bot-summary .forced {
+            color: #FF142A;
+            font-weight: bold;
+        }
+
     </style>
 </head>
 <body>
@@ -289,12 +314,6 @@
 
             <div class="card">
                 <h2>Create a new game</h2>
-                <div class="mode-toggle">
-                    <label>
-                        <input type="checkbox" id="play-vs-bot">
-                        Play against bot (ML)
-                    </label>
-                </div>
                 <button id="create-btn" onclick="createGame()" style="width:100%">Create Game</button>
                 <p id="create-error" class="error-msg"></p>
             </div>
@@ -309,6 +328,27 @@
                 <button id="join-btn" onclick="joinGame()" style="width:100%">Join Game</button>
                 <p id="join-error" class="error-msg"></p>
             </div>
+
+            <div class="divider">- or -</div>
+
+            <div class="card">
+                <h2>Play against the bot</h2>
+                <div style="margin-bottom:0.75rem">
+                    <label class="field-label" for="bot-difficulty">Difficulty</label>
+                    <select id="bot-difficulty">
+                        <option value="easy">Easy &mdash; blunders, plays one round at a time</option>
+                        <option value="medium" selected>Medium &mdash; solid, punishes real mistakes</option>
+                        <option value="hard">Hard &mdash; as strong as I could make it (thinks ~2s)</option>
+                    </select>
+                </div>
+                <button id="bot-btn" onclick="startBotGame()" style="width:100%">Play the Bot</button>
+                <p class="bot-note">
+                    You play green (player 1). The bot commits its three moves from
+                    the board at the start of each round, before yours are sent, so
+                    neither side can see the other&rsquo;s moves.
+                </p>
+                <p id="bot-error" class="error-msg"></p>
+            </div>
         </div>
 
         <!-- LOBBY SCREEN -->
@@ -322,7 +362,6 @@
                     <span id="lobby-code" class="game-code"></span>
                     <button class="copy-btn" onclick="copyCode()">Copy</button>
                 </div>
-                <p id="lobby-bot-text" style="margin-bottom:1rem; color:#aaa; display:none;">Bot opponent is ready.</p>
                 <button id="start-btn" onclick="startPlaying()" style="width:100%">Start Playing</button>
             </div>
         </div>
@@ -337,6 +376,7 @@
             </div>
 
             <div class="card">
+                <div id="bot-summary" class="bot-summary"></div>
                 <div id="board">
                     <table><tr><td class="player1">a: 3</td><td class="player0">b: 0</td><td class="player0">c: 0</td></tr><tr><td class="player0">d: 0</td><td class="player0">e: 0</td><td class="player0">f: 0</td></tr><tr><td class="player0">g: 0</td><td class="player0">h: 0</td><td class="player2">i: 3</td></tr></table>
                 </div>
@@ -375,15 +415,23 @@
         </div>
     </div>
 
+    <!-- Built from src/bot/ by `npm run build:bot`; shares src/engine.ts with the server. -->
+    <script src="/bot.js"></script>
     <script>
         const API_URL = '/api';
 
         let gameGuid = null;
         let secret = null;
         let playerNumber = null;
-        let playAgainstMl = false;
         let pollTimer = null;
         let lastBoardHtml = '';
+
+        // Set only for bot games. Holding the bot's secret client-side is what
+        // lets the whole thing work with no server or schema change: the page
+        // plays both seats through the ordinary API.
+        let botSecret = null;
+        let botDifficulty = null;
+        let lastBotDecision = null;
 
         // --- Screen management ---
 
@@ -424,7 +472,7 @@
 
         function saveGameState() {
             localStorage.setItem('allsfair_game', JSON.stringify({
-                gameGuid, secret, playerNumber, playAgainstMl
+                gameGuid, secret, playerNumber, botSecret, botDifficulty
             }));
         }
 
@@ -444,7 +492,9 @@
             gameGuid = null;
             secret = null;
             playerNumber = null;
-            playAgainstMl = false;
+            botSecret = null;
+            botDifficulty = null;
+            lastBotDecision = null;
             document.getElementById('resume-bar').style.display = 'none';
         }
 
@@ -459,7 +509,9 @@
             gameGuid = saved.gameGuid;
             secret = saved.secret;
             playerNumber = saved.playerNumber;
-            playAgainstMl = Boolean(saved.playAgainstMl);
+            botSecret = saved.botSecret || null;
+            botDifficulty = saved.botDifficulty || null;
+            lastBotDecision = null;
             enterGameScreen();
             refreshBoard();
         }
@@ -469,23 +521,20 @@
         async function createGame() {
             const btn = document.getElementById('create-btn');
             const errEl = document.getElementById('create-error');
-            const playVsBot = document.getElementById('play-vs-bot').checked;
             errEl.textContent = '';
             btn.disabled = true;
             btn.textContent = 'Creating...';
 
             try {
-                const data = await api('create_game', { play_against_ml: playVsBot });
+                const data = await api('create_game');
                 gameGuid = data.game_guid;
                 secret = data.secret;
                 playerNumber = 1;
-                playAgainstMl = Object.prototype.hasOwnProperty.call(data, 'play_against_ml')
-                    ? Boolean(data.play_against_ml)
-                    : playVsBot;
+                botSecret = null;
+                botDifficulty = null;
                 saveGameState();
 
                 document.getElementById('lobby-code').textContent = gameGuid;
-                updateLobbyModeUi();
                 showScreen('lobby-screen');
             } catch (e) {
                 errEl.textContent = e.message;
@@ -516,7 +565,8 @@
                 gameGuid = data.game_guid;
                 secret = data.secret;
                 playerNumber = 2;
-                playAgainstMl = false;
+                botSecret = null;
+                botDifficulty = null;
                 saveGameState();
                 enterGameScreen(data.html);
             } catch (e) {
@@ -525,6 +575,77 @@
                 btn.disabled = false;
                 btn.textContent = 'Join Game';
             }
+        }
+
+        // --- Bot games ---
+
+        // Creating the game and immediately joining it leaves this page holding
+        // both secrets, so it can submit for both seats through the ordinary API.
+        // Nothing about the server or the schema changes, and the search runs
+        // here rather than in the worker — which matters, because a Cloudflare
+        // free-tier request gets 10ms of CPU and hard mode needs about two
+        // seconds.
+        async function startBotGame() {
+            const btn = document.getElementById('bot-btn');
+            const errEl = document.getElementById('bot-error');
+            errEl.textContent = '';
+
+            if (typeof AllsfairBot === 'undefined') {
+                errEl.textContent = 'The bot bundle did not load. Run `npm run build:bot`.';
+                return;
+            }
+
+            const difficulty = document.getElementById('bot-difficulty').value;
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+
+            try {
+                const created = await api('create_game');
+                const joined = await api('join_game', { game_guid: created.game_guid });
+
+                gameGuid = created.game_guid;
+                secret = created.secret;
+                playerNumber = 1;
+                botSecret = joined.secret;
+                botDifficulty = difficulty;
+                lastBotDecision = null;
+                saveGameState();
+
+                enterGameScreen(created.html);
+            } catch (e) {
+                errEl.textContent = e.message;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Play the Bot';
+            }
+        }
+
+        function showBotThinking() {
+            document.getElementById('move-form').style.display = 'none';
+            const waitingEl = document.getElementById('waiting-msg');
+            waitingEl.textContent = `The ${botDifficulty} bot is thinking...`;
+            waitingEl.style.display = 'block';
+        }
+
+        // Hard mode blocks the main thread for a couple of seconds. Yielding once
+        // lets the browser paint the thinking message before that happens;
+        // without it the message would only appear after the search had already
+        // finished.
+        function yieldToBrowser() {
+            return new Promise((resolve) => setTimeout(resolve, 30));
+        }
+
+        function renderBotSummary() {
+            const el = document.getElementById('bot-summary');
+            if (!el) return;
+            if (!lastBotDecision) {
+                el.innerHTML = '';
+                return;
+            }
+            const moves = lastBotDecision.plan.join(' ');
+            el.innerHTML = lastBotDecision.forcedWin
+                ? `Bot played ${moves} &mdash; <span class="forced">a win it proved you cannot stop</span>`
+                : `Bot played ${moves}`;
         }
 
         // --- Lobby ---
@@ -542,42 +663,12 @@
             refreshBoard();
         }
 
-        function updateLobbyModeUi() {
-            const shareText = document.getElementById('lobby-share-text');
-            const codeRow = document.getElementById('lobby-code-row');
-            const botText = document.getElementById('lobby-bot-text');
-            const startBtn = document.getElementById('start-btn');
-
-            if (playAgainstMl) {
-                shareText.textContent = 'Bot match created.';
-                codeRow.style.display = 'none';
-                botText.style.display = 'block';
-                startBtn.textContent = 'Start Bot Match';
-                return;
-            }
-
-            shareText.textContent = 'Share this code with your opponent:';
-            codeRow.style.display = 'block';
-            botText.style.display = 'none';
-            startBtn.textContent = 'Start Playing';
-        }
-
-        function syncModeFromResponse(data) {
-            if (Object.prototype.hasOwnProperty.call(data, 'play_against_ml')) {
-                const previousMode = playAgainstMl;
-                playAgainstMl = Boolean(data.play_against_ml);
-                if (previousMode !== playAgainstMl) {
-                    renderPlayerLabel();
-                }
-            }
-        }
-
         // --- Game screen ---
 
         function renderPlayerLabel() {
             const label = document.getElementById('player-label');
-            label.textContent = playAgainstMl && playerNumber === 1
-                ? 'Player 1 (vs Bot)'
+            label.textContent = botSecret
+                ? `Player ${playerNumber} vs ${botDifficulty} bot`
                 : `Player ${playerNumber}`;
             label.className = 'player-label ' + (playerNumber === 1 ? 'p1' : 'p2');
         }
@@ -687,13 +778,32 @@
         function showWaiting() {
             document.getElementById('move-form').style.display = 'none';
             const waitingEl = document.getElementById('waiting-msg');
-            waitingEl.textContent = playAgainstMl
-                ? 'Bot is preparing moves...'
-                : 'Waiting for opponent to submit moves...';
+            waitingEl.textContent = 'Waiting for opponent to submit moves...';
             waitingEl.style.display = 'block';
         }
 
         // --- Submit moves ---
+
+        // Commits the bot's share of the current round.
+        //
+        // The work is in src/bot/driver.ts rather than here: it decides what the
+        // bot may see and how many moves it may commit, and both are tested
+        // against the real worker in test/bot.driver.test.ts. This wrapper only
+        // supplies the transport and the thinking indicator.
+        async function submitBotMoves(current) {
+            const outcome = await AllsfairBot.submitBotRound({
+                api: api,
+                gameGuid: gameGuid,
+                botSecret: botSecret,
+                difficulty: botDifficulty,
+                onThinking: async () => {
+                    showBotThinking();
+                    await yieldToBrowser();
+                },
+            }, current);
+            if (outcome.decision) lastBotDecision = outcome.decision;
+            return outcome.response;
+        }
 
         async function submitMoves(event) {
             event.preventDefault();
@@ -743,13 +853,20 @@
                     secret: secret,
                     player: String(playerNumber),
                 });
-                syncModeFromResponse(current);
                 const myCount = String(playerNumber) === '1'
                     ? current.player_1_move_count
                     : current.player_2_move_count;
                 const alreadyInRound = myCount % 3;
 
                 let latestResponse = current;
+
+                // The bot commits first so that the human's last submit is the
+                // one that returns the fully resolved round. Order does not
+                // affect fairness: the bot's plan is already fixed above.
+                if (botSecret) {
+                    latestResponse = await submitBotMoves(current);
+                }
+
                 for (const move of moves.slice(alreadyInRound)) {
                     const data = await api('submit_move', {
                         game_guid: gameGuid,
@@ -757,7 +874,6 @@
                         secret: secret,
                         player: String(playerNumber),
                     });
-                    syncModeFromResponse(data);
                     latestResponse = data;
                 }
 
@@ -767,6 +883,14 @@
                 document.getElementById('move3').value = '';
 
                 updateBoard(latestResponse.html);
+
+                // A bot game resolves the whole round in this one exchange, so
+                // there is never anything to poll for.
+                if (botSecret) {
+                    renderBotSummary();
+                    showMoveForm();
+                    return;
+                }
 
                 if (latestResponse.round_complete) {
                     showMoveForm();
@@ -792,7 +916,6 @@
                     secret: secret,
                     player: String(playerNumber),
                 });
-                syncModeFromResponse(data);
                 updateBoard(data.html);
             } catch (e) {
                 console.error('Poll error:', e);
@@ -809,7 +932,6 @@
                         secret: secret,
                         player: String(playerNumber),
                     });
-                    syncModeFromResponse(data);
 
                     if (data.round_complete && data.completed_rounds >= targetCompletedRounds) {
                         updateBoard(data.html);

@@ -1,7 +1,7 @@
 # allsfair-game
 
 Allsfair — a game of simultaneous, predetermined moves. This repo is the whole
-thing: game rules, bot, API, and frontend. Live at
+thing: game rules, API, and frontend. Live at
 [allsfair.hightower.space](https://allsfair.hightower.space/).
 
 One Cloudflare Worker serves everything:
@@ -27,185 +27,112 @@ not. Keep it passing. A deliberate rules change means regenerating it from
 `src/engine.ts` (replay loop → serialize → `toHtmlTable`); there is no longer
 an upstream generator.
 
-## Bot
+## The bot
 
-Play-against-bot ships: `create_game` with `play_against_ml` seats the bot
-(`src/bot.ts`) as player 2. Moves are simultaneous, so each round is a matrix
-game, and the bot solves it as one: it generates candidate trios for both sides,
-scores every pairing with the real engine, finds a mixed-strategy equilibrium by
-regret matching, and *samples* its trio from that mix. Between solves, a
-double-oracle loop asks each side for its best response to the other's current
-mix and adds those counters to the strategy sets.
+`src/bot/` is a single-player opponent with three settings. It is pure: no I/O,
+no clock, no globals, and randomness only through an injected `Rng`, so a given
+seed always plays the same game. `src/bot/index.ts` is the whole public surface.
 
-That structure exists for one measured reason. Every earlier bot picked the
-single best trio against a fixed guess at the opponent, and a bot that always
-answers a position the same way can be learned and farmed — against an opponent
-that samples the bot's policy and best-responds to it, the argmax bot won 4% of
-games while beating every scripted opponent 99-100%. The constants at the top of
-`src/bot.ts` carry the numbers, including the tradeoff the equilibrium makes:
-solving the round costs raw strength against weak opponents and buys back
-robustness against ones that adapt.
+It runs **in the browser**, not the worker. A Cloudflare free-tier request gets
+10ms of CPU; the strongest setting needs about two seconds. `npm run build:bot`
+bundles `src/bot/browser.ts` to `public/bot.js` with esbuild, so the browser and
+the worker share one copy of the rules in `src/engine.ts` and cannot drift.
+`public/bot.js` is gitignored and built in CI before deploy.
 
-`test/bot.strength.test.ts` gates strength against random, greedy-heuristic,
-pre-tuning, argmax, human-style, and best-responding opponents, from both seats.
-To measure rather than just gate:
+"Play against the bot" on the home screen creates a game and immediately joins
+it, so the page holds both players' secrets and submits for both seats through
+the ordinary API. No new endpoint, no schema change, no server change.
+
+### Difficulties
+
+| | What it does | Time per round |
+|---|---|---|
+| easy | Greedy, one round at a time, no proofs, and a 35% chance of ignoring its own best idea | ~2ms |
+| medium | One round of equilibrium play with both proofs on | ~25-50ms |
+| hard | The same, approximated far more closely: wide support, best-response oracle run to convergence | ~1-4s |
+
+### How strong is it, and can it play perfectly?
+
+Not in general, and the reason is structural: moves are simultaneous, so optimal
+play is a *mixed* strategy rather than a best move, and the game has no round
+limit while restock keeps growing troop totals, so the state space is infinite.
+There is no whole-game solution to find.
+
+Two narrower claims do hold, and `src/bot/exact.ts` implements them with proofs
+rather than estimates:
+
+- **It never misses a forced win.** "Is there a plan of mine that wins against
+  every reply?" is a quantifier check, not a search heuristic.
+- **It never walks into a forced loss.** Same, for "is there a reply that beats
+  this plan?"
+
+Both enumerate the full legal move space, so an answer of "none" is a proof. Both
+stay affordable because of two sound restrictions: a zero-troop move is always
+legal, so an all-pass reply is always available, and therefore a forced win must
+also beat a passive opponent — which cuts the candidates from thousands to a
+handful; and while a team still holds its home, only replies that move onto that
+home can take it. Where a budget cuts a search short it reports `proven: false`
+rather than claiming a proof it did not earn.
+
+The opening is small enough to solve outright — 547 plans a side, so the whole
+299k-cell matrix fits — and hard plays it at **exactly zero exploitability**.
+
+Hard's double oracle is run to convergence rather than to a guessed limit: 12
+rounds measured 0.148, 30 rounds 0.1193, and both 30-rounds-with-8000-solver-
+iterations and 60-rounds-with-a-5000-plan-pool measured 0.1193 exactly. Three
+settings agreeing to four decimal places means the equilibrium of the candidate
+pool has been found. The residual is the pool itself — `candidateMoves` collapses
+troop counts to a ladder of four, and collisions net troop for troop, so
+intermediate counts are genuinely strategic. That is the next lever, and it costs
+time rather than accuracy.
+
+Beyond that, strength is measured, not asserted. `npm run tournament` reports
+two things, because they answer different questions:
+
+- **Head to head.** Medium beats easy 19-1 over paired games. It cannot separate
+  hard from medium: both approximate the same equilibrium, and a symmetric
+  zero-sum game has value zero, so two near-equilibrium players draw each other
+  however much stronger one is. Measured directly, hard against medium came out
+  9-11 — noise, not a ranking.
+- **Exploitability.** What a best-responding opponent, searching its whole legal
+  plan space, can take from the bot's mixed strategy. This is what "as good as
+  possible" means in a simultaneous-move game, and it ranks all three cleanly
+  where head-to-head cannot:
+
+  | | mean | at the opening | time per round |
+  |---|---|---|---|
+  | easy | 0.65 | 0.43 | ~3ms |
+  | medium | 0.25 | 0.13 | ~120ms |
+  | hard | 0.12 | **0.00** | ~1-4s |
+
+Two findings worth knowing before changing anything:
+
+- **Lookahead made it worse.** Depth 2 measured 0.27 exploitability against 0.12
+  for depth 1, and lost its head-to-head with medium. Lookahead nodes have to
+  pick candidates with a narrow greedy beam, and those values are noisier than
+  simply evaluating the position, so searching deeper replaced a reliable signal
+  with an unreliable one. The `depth` option is still there for when the
+  evaluation is good enough to earn it.
+- **Equal settings deadlock.** Medium against medium reaches a stable cycle where
+  both sides pour their home stack into `e` every round and annihilate. That is
+  the equilibrium of a symmetric position, not a bug — which is why the
+  tournament plays from varied openings, twice per position with the seats
+  swapped.
+
+The evaluation in `src/bot/eval.ts` encodes four things the rules make true, all
+verified against the engine in `test/bot.eval.test.ts`: land is income, because
+restock pays per square owned and counts squares holding no troops at all, so one
+troop on a neutral square buys a permanent income stream; income stops when the
+home falls; a home falls when the enemy can deliver more troops to it in one
+round than the defender's whole army holds; and reach is three moves, which puts
+every square except the opposite corner within striking distance of a home.
 
 ```shell
-BOT_SWEEP=1 npx vitest run test/eval/sweep.test.ts --reporter=verbose --silent=false
+npm run build:bot                      # bundle the browser bot
+npm run tournament                     # measure strength at full strength
+npm run tournament -- --positions 20   # more games, tighter numbers
+npm run tournament -- --trace          # print a game move by move
 ```
-
-`test/eval/` holds the harness, the opponent pool, and frozen copies of the two
-previous bot generations (`bot-baseline.ts`, `bot-argmax.ts`) to A/B against.
-Both vitest flags are needed or the output is swallowed.
-
-The two exploiter opponents in that pool are the ones worth watching: they are
-the only opponents that adapt inside a game, so they are the only ones that can
-tell two strong bots apart. The scripted opponents saturate. They attack
-different things — one guesses the bot's plan, the other empties the square it is
-about to move from — so read the worse of the two as the bot's exposure.
-
-### Real positions
-
-Everything above is the bot against code. `test/bot.positions.test.ts` gates it
-against people: `test/fixtures/loss-positions.json` holds 27 boards taken from
-the play-against-bot games in production D1 — every round where the human's trio
-actually put troops onto a bot-held `i` — each with the human's real trio for
-that round. Regenerate it with `test/eval/extract-positions.ts` as games
-accumulate; the header there has the `wrangler d1` commands, including the
-account id, which is **not** the one in `wrangler.toml`.
-
-Prefer this to inventing an opponent. The deployed bot won 4 of the 17 decided
-games it played against real people while the scripted pool showed it at
-75-100%, and hand-written imitations of human play all saturate — a scripted
-approximation of a human is a much weaker opponent than the human.
-
-What the 22 games say. Of the 27 attacks on a home the bot still held, 10 were
-held, 10 arrived with more troops than the garrison had at the *start of the
-round*, and 7 were the bot emptying a home that would otherwise have survived.
-Those seven are the bait described below, and they are the single largest
-identified cause of losing the home.
-
-Measure that split at the round start, not at the moment of impact. Counting the
-garrison as it stood when the killing move landed reads 15 outnumbered and 1
-self-inflicted, which is wrong in the most misleading direction available: in the
-bait line the home is empty precisely *because* the bot left two moves earlier in
-the same round, so its own mistake gets recorded as an opposing stack being too
-big. That mistake sent the first day of work here after an economy problem.
-
-The other half is real. A stack that genuinely outnumbers the garrison is visible
-a round ahead — the fixture's `strike`/`garrison` columns, where
-`strike > garrison` held at 28% of round-starts in the games it lost and 2% of
-the ones it won — and it sits two squares out rather than adjacent, because a
-trio is three moves and the human assembles and strikes inside one round.
-Upstream of that is territory: in the games it lost the bot held 3.2-3.6 squares
-to the human's 4.5-5.5 from round 2 on, and restock pays per square owned.
-
-Seventeen of the 27 are marked `defensible` — an exhaustive depth-3 search proves
-some bot trio holds the home. The other 10 are already lost on arrival (the bot
-reaches them with 6.2 material against 15.1) and gating them would be gating the
-impossible; the test reports them without a floor.
-
-**Four changes aimed at that analysis were tried and reverted**, and the shape of
-the failure is worth more than any of them would have been. Each made the bot
-stronger against opponents that do not adapt and weaker against the two that do:
-
-```
-                        heuristic  human(6,2)  exploiter  denial-expl  hold rate
-  baseline                  75         78          42          67        64%
-  full-strength threat      80         80          33          33        62%
-  marginal home deficit     78         83          29          50        61%
-  INCOME_WEIGHT 14          83         83          46          63        63%
-  fan-out generator         93         93          21          33        57%
-```
-
-The last one is the clearest: +18/+15 against scripted play, -21/-34 against
-adaptive. Re-weighting the evaluation is not what costs this bot games against
-people, and a change that only moves the scripted columns is not evidence of
-anything. Real humans are on the adaptive side of that table — 13 of the 17
-decided games opened with the identical trio `a3b b3e e3f`, and they win by
-baiting a habit rather than by out-searching anything.
-
-### The bait, and the flank
-
-What the bot was actually losing to, found by playing it and then confirmed all
-over the production log. Put a stack on `f` or `h`, next to the bot's home. Its
-best-scoring reply is to empty the garrison onto that stack — `i4f` at 4.32 on a
-board where `f` held 3 and `i` held 4, played in 30 of 30 seeds. Both sides move
-at once, so if the stack has already stepped aside the attack captures an empty
-square and leaves the home on zero with two moves still to play. The stack walks
-back in through the home's *other* neighbour:
-
-```
-  f3e e3h h3i        and, mirrored,        h2e e2f f2i
-```
-
-Nothing in this file could produce that. `rushTrio` takes the short path and
-enters the home immediately, and `scoredActions` pays `ADVANCE_WEIGHT` for
-closing distance, so the first move — stepping *away* from the home — scores as a
-retreat and is never sampled. The oracle can only best-respond with a trio some
-generator emitted, which is why more search never found the answer. `flankTrio`
-is that plan, and it goes to both sides: into the opponent model so the bot stops
-believing its garrison can safely leave, and into its own pool so it can play the
-line itself.
-
-On the four recorded positions where a human ran it, 40 seeds each:
-
-```
-  position            held before   held after   emptied home before   after
-  live game r1            0/40         39/40           37/40           1/40
-  live game r3           12/40         14/40           16/40          12/40
-  D1 0deb12a4 r3          0/40         37/40           37/40           4/40
-  D1 9b7aac1c r1          0/40         40/40           39/40           2/40
-```
-
-And across the pool, 60 games a cell:
-
-```
-  column              before   after
-  exploiter             47%     43%
-  denial-exploiter      47%     53%
-  heuristic             75%     93%
-  human(6,2)            77%     97%
-  pre-tuning bot        59%     85%
-  real positions        62%     74%
-```
-
-Which is the opposite shape to the four reverted attempts above. Both adaptive
-columns stay where they were — inside their error bars, moving in opposite
-directions — while everything else rises, because this is not the bot being
-greedier. It is a hole in the model being filled: the plan already existed, both
-sides can now see it, and the equilibrium prices it.
-
-### Winning the home back
-
-One thing the bot genuinely could not do, found by playing it rather than by
-measuring it: once its home fell it would drift, and never take it back.
-
-The engine needs *strictly* more troops than the defender to flip a square
-(`Board.applyMove`), so a 3-stack bouncing off a home held by 3 leaves it
-enemy-owned and empty. Retaking usually costs two moves — merge, then storm —
-and every generator in `src/bot.ts` is pointed at the *enemy* home, so the merge
-step scores as a retreat and no generator would ever emit it. The search cannot
-pick a plan nothing produced. `reclaimTrio` is that plan; it is gated on the home
-actually having fallen, because with the home standing it *is* `rushTrio`, and
-adding a duplicate would shift the `DENIAL_EVERY` cadence and the RNG stream in
-every position on the board.
-
-Recapture rate over 30 seeds a position, before and after:
-
-```
-  position                                 before   after
-  from a real game, e3 + f3 vs garrison 3    3/30   20/30
-  same shape, nothing else on the board      3/30   18/30
-  one stack already big enough              28/30   30/30
-  troops split across f and h               17/30   20/30
-  troops three hops out                      0/30    3/30
-  garrison 9, two 3-stacks (impossible)      0/30    0/30
-```
-
-The pool columns are unchanged to within a point (exploiter 47->48, denial 47->48,
-heuristic 75->75, human 77->77 over 60 games a cell), which is what the gating
-predicts: it is inert until the home is lost.
 
 ## Development
 
@@ -216,19 +143,22 @@ npx tsc         # typecheck
 npm run serve   # the real app in a browser, on plain Node (no workerd)
 ```
 
+`npm run serve` builds the bot bundle first, so "Play against the bot" works
+locally exactly as deployed.
+
 Note: `npm run dev` (`wrangler dev`) and miniflare need workerd, which requires
 macOS 13.5+ or Linux. On older machines everything above still works, because
 none of it uses workerd.
 
-`npm run serve` (`test/eval/serve.ts`) is a `node:http` server that serves
-`public/index.html` and hands everything else to the actual worker entry point
-(`src/index.ts`), with `test/d1-shim.ts` standing in for D1. The frontend, API,
-engine and bot are the deployed code; only the runtime differs. Games are
+`npm run serve` (`test/serve.ts`) is a `node:http` server that serves
+`public/` and hands everything else to the actual worker entry point
+(`src/index.ts`), with `test/d1-shim.ts` standing in for D1. The frontend, API
+and engine are the deployed code; only the runtime differs. Games are
 in-memory unless you set `ALLSFAIR_DB=some.db`; `PORT` overrides 8787.
 
 It does not replace the deploy smoke test — it exercises neither real D1 nor the
 platform's assets binding. Node loads modules once at startup, so restart it
-after editing `src/bot.ts` or you will keep playing the old bot.
+after editing anything under `src/`.
 
 ## Deploy
 

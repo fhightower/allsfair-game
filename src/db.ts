@@ -89,28 +89,6 @@ export async function writeMove(
     .run();
 }
 
-/**
- * Count-guarded bot-move insert: writes the move only if the game's current
- * player-2 move count equals `expectedP2Count`. Makes concurrent bot-trio
- * generation single-winner — the loser inserts nothing.
- */
-export async function writeBotMoveIfCountMatches(
-  db: D1Database,
-  gameGuid: string,
-  moveString: string,
-  expectedP2Count: number
-): Promise<boolean> {
-  const result = await db
-    .prepare(
-      `INSERT INTO moves (game_guid, move_string, player)
-       SELECT ?, ?, 2
-       WHERE (SELECT COUNT(*) FROM moves WHERE game_guid = ? AND player = 2) = ?`
-    )
-    .bind(gameGuid, moveString, gameGuid, expectedP2Count)
-    .run();
-  return result.meta.changes > 0;
-}
-
 export async function getMovesForGuid(
   db: D1Database,
   gameGuid: string
@@ -158,30 +136,4 @@ export async function saveMove(
 ): Promise<RoundState> {
   await writeMove(db, gameGuid, move, player);
   return getBoardAndRoundState(db, gameGuid);
-}
-
-export async function getMlRoundContext(
-  db: D1Database,
-  gameGuid: string,
-  roundIndex: number
-): Promise<{ board: Board; botMovesInRound: string[] }> {
-  const moves = await getMovesForGuid(db, gameGuid);
-  const p1Moves: Move[] = [];
-  const p2Moves: Move[] = [];
-  for (const m of moves) {
-    (m.player === 1 ? p1Moves : p2Moves).push(new Move(m.moveString));
-  }
-
-  const board = new Board();
-  const priorPairCount = roundIndex * 3;
-  const pairCount = Math.min(priorPairCount, p1Moves.length, p2Moves.length);
-  for (let i = 0; i < pairCount; i++) {
-    board.applyMovePair(new MovePair(p1Moves[i], p2Moves[i]));
-    if ((i + 1) % 3 === 0) board.restock();
-  }
-
-  const botMovesInRound = p2Moves
-    .slice(priorPairCount, priorPairCount + 3)
-    .map((m) => m.toString());
-  return { board, botMovesInRound };
 }
