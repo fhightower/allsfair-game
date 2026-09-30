@@ -7,21 +7,16 @@
 //   forced win  is there a plan of mine that wins against EVERY reply?
 //   refutation  is there a reply that beats THIS plan of mine outright?
 //
-// Both enumerate `legalMoves` in full rather than the pruned candidate set, so
-// an answer of "none" is a proof rather than a guess. Where a budget cuts the
-// search short, `proven` comes back false and a null answer means "not shown",
-// never "does not exist".
+// Replies are enumerated on the actual board produced by each fixed plan.
+// Forced-win candidates use conservative troop bounds so interference cannot
+// hide a plan. Neither proof uses the approximate candidate set. Where a budget
+// cuts the search short, `proven` is false and a null answer means "not shown".
 //
-// The plan space grows cubically in troops held, and restock pays a home up to
-// nine troops a round, so a long defensive game reaches stacks where the space
-// stops being enumerable: measured at 15k plans for 10 troops on a home, 368k for
-// 30, and 1.2M for 45. EXACT_PLAN_LIMIT bounds that. Past it the layer keeps
-// working over as much as it enumerated but stops calling the result a proof,
-// which is the honest reading — and a genuinely winning plan is not lost either
-// way, because it still scores near the top of the equilibrium search.
+// EXACT_PLAN_LIMIT bounds enumeration before the simulation budget is checked.
+// A truncated space never supports a claim that no winning reply exists.
 import type { BoardState } from "../engine";
-import { resolveRound, type Plan } from "./simulate";
-import { enumeratePlans, legalMoves, passFor } from "./plans";
+import { resolvePair, resolveRound, troopsHeld, type Plan } from "./simulate";
+import { legalMoves, passFor } from "./plans";
 
 export interface ForcedWinResult {
   plan: Plan | null;
@@ -48,8 +43,71 @@ interface PlanSpace {
   complete: boolean;
 }
 
+/**
+ * A superset of the plans that can matter against any simultaneous reply.
+ * Enemy garrisons may move away, so passive simulation cannot bound later
+ * moves. Instead, track an upper bound on our troops at each square. Incoming
+ * troops increase it; outgoing troops do not reduce it, since interference
+ * may prevent an earlier transfer. No square can exceed our initial army.
+ * Requests above a bound have the same effect as requesting the bound because
+ * the engine clamps them. This includes every distinct response-dependent plan.
+ */
 function planSpace(state: BoardState, team: number): PlanSpace {
-  const plans = enumeratePlans(state, team, legalMoves, EXACT_PLAN_LIMIT);
+  const army = troopsHeld(state, team);
+  const bounds = Object.fromEntries(
+    Object.entries(state).map(([name, node]) => [
+      name,
+      node.owner === team ? node.troopCount : 0,
+    ])
+  );
+  const plans: Plan[] = [];
+  const extend = (prefix: string[], available: Record<string, number>): void => {
+    if (plans.length >= EXACT_PLAN_LIMIT) return;
+    if (prefix.length === 3) {
+      plans.push(prefix as Plan);
+      return;
+    }
+    extend([...prefix, passFor(team)], available);
+    for (const [start, count] of Object.entries(available)) {
+      for (const end of state[start].neighbors) {
+        for (let troops = 1; troops <= count; troops++) {
+          extend([...prefix, `${start}${troops}${end}`], {
+            ...available,
+            [end]: Math.min(army, available[end] + troops),
+          });
+          if (plans.length >= EXACT_PLAN_LIMIT) return;
+        }
+      }
+    }
+  };
+  extend([], bounds);
+  return { plans, complete: plans.length < EXACT_PLAN_LIMIT };
+}
+
+/**
+ * Enumerate replies on the actual board produced by the fixed opposing plan.
+ * A later move can spend troops preserved by the opponent vacating a square.
+ * Enumerating against passes would miss those replies and give false proofs.
+ */
+function replySpace(state: BoardState, team: number, opposingPlan: Plan): PlanSpace {
+  const plans: Plan[] = [];
+  const extend = (board: BoardState, prefix: string[]): void => {
+    for (const move of legalMoves(board, team)) {
+      const next = [...prefix, move];
+      if (next.length === 3) {
+        plans.push(next as Plan);
+      } else {
+        const opposingMove = opposingPlan[prefix.length];
+        const after =
+          team === 1
+            ? resolvePair(board, move, opposingMove)
+            : resolvePair(board, opposingMove, move);
+        extend(after, next);
+      }
+      if (plans.length >= EXACT_PLAN_LIMIT) return;
+    }
+  };
+  extend(state, []);
   return { plans, complete: plans.length < EXACT_PLAN_LIMIT };
 }
 
@@ -89,7 +147,6 @@ export function findForcedWin(
   const passive = passivePlan(opponent);
   const mine = planSpace(state, team);
   let simulations = 0;
-  let replies: PlanSpace | null = null;
 
   for (const plan of mine.plans) {
     if (simulations >= maxSimulations) {
@@ -98,7 +155,7 @@ export function findForcedWin(
     simulations++;
     if (winnerOf(state, team, plan, passive) !== team) continue;
 
-    replies ??= planSpace(state, opponent);
+    const replies = replySpace(state, opponent, plan);
     let forced = true;
     for (const reply of replies.plans) {
       if (simulations >= maxSimulations) {
@@ -156,8 +213,8 @@ function threatKeys(plan: Plan, home: string): { atHome: number; committed: numb
  * opponent can finish by destroying the field army instead, and every reply
  * stays in.
  */
-function threateningReplies(state: BoardState, team: number): PlanSpace {
-  const space = planSpace(state, other(team));
+function threateningReplies(state: BoardState, team: number, plan: Plan): PlanSpace {
+  const space = replySpace(state, other(team), plan);
   const home = HOME[team];
   const reachable =
     state[home].owner === team
@@ -178,7 +235,9 @@ export function findRefutation(
   plan: Plan,
   maxSimulations = Infinity
 ): RefutationResult {
-  return refute(state, team, plan, threateningReplies(state, team), maxSimulations);
+  return refute(
+    state, team, plan, threateningReplies(state, team, plan), maxSimulations
+  );
 }
 
 /**
@@ -217,10 +276,10 @@ export interface FilterResult {
 /**
  * Splits `plans` into those with no refutation and those with one.
  *
- * The search checks hundreds of plans against the same position, so the reply
- * space is enumerated once for the whole batch instead of once per plan. If the
- * budget runs out partway the plans checked so far are still returned, with
- * `proven` false — an unchecked plan is dropped rather than assumed safe.
+ * Each plan needs its own reply space because simultaneous moves change which
+ * replies have an effect. If the budget runs out partway, checked plans are
+ * still returned with `proven` false. An unchecked plan is dropped rather than
+ * assumed safe.
  */
 export function filterRefutedPlans(
   state: BoardState,
@@ -228,7 +287,6 @@ export function filterRefutedPlans(
   plans: Plan[],
   maxSimulations = Infinity
 ): FilterResult {
-  const replies = threateningReplies(state, team);
   const safe: Plan[] = [];
   let simulations = 0;
 
@@ -236,7 +294,7 @@ export function filterRefutedPlans(
     if (simulations >= maxSimulations) {
       return { safe, proven: false, simulations };
     }
-    const result = refute(state, team, plan, replies, maxSimulations - simulations);
+    const result = findRefutation(state, team, plan, maxSimulations - simulations);
     simulations += result.simulations;
     if (!result.refutation && !result.proven) {
       // Could not clear this plan, so it is not put in the safe set and the
@@ -246,5 +304,5 @@ export function filterRefutedPlans(
     if (!result.refutation) safe.push(plan);
   }
 
-  return { safe, proven: replies.complete, simulations };
+  return { safe, proven: true, simulations };
 }

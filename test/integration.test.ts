@@ -27,7 +27,7 @@ function api(body: unknown): Promise<Response> {
 }
 
 describe("POST /api", () => {
-  it("plays a full PvP round over HTTP", async () => {
+  it("reveals a PvP round only after both players commit three moves", async () => {
     const createResp = await api({ action: "create_game" });
     expect(createResp.status).toBe(200);
     const created = (await createResp.json()) as any;
@@ -46,6 +46,7 @@ describe("POST /api", () => {
         player: 1,
       });
       expect(resp.status).toBe(200);
+      expect((await resp.json() as any).html).toBe(created.html);
     }
     let last: any;
     for (const move of ["i1h", "i1f", "h1e"]) {
@@ -58,6 +59,16 @@ describe("POST /api", () => {
       });
       expect(resp.status).toBe(200);
       last = await resp.json();
+      if (!last.round_complete) {
+        expect(last.html).toBe(created.html);
+        expect(last.completed_rounds).toBe(0);
+        for (const [player, secret] of [[1, created.secret], [2, joined.secret]]) {
+          const polled = await (await api({
+            action: "get_moves", game_guid: created.game_guid, player, secret,
+          })).json() as any;
+          expect(polled.html).toBe(created.html);
+        }
+      }
     }
     expect(last.round_complete).toBe(true);
     expect(last.completed_rounds).toBe(1);

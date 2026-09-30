@@ -60,6 +60,25 @@ const FORCED_WIN = pos({ a: [1, 0], f: [1, 5], i: [2, 1] });
 const NO_FORCED_WIN = pos({ a: [1, 0], f: [1, 3], c: [2, 4], i: [2, 1] });
 
 describe("findForcedWin", () => {
+  it("verifies a forced win against commitments from every square", () => {
+    const result = findForcedWin(FORCED_WIN, 1);
+    expect(result.proven).toBe(true);
+    expect(result.plan).not.toBeNull();
+    // The opponent has one troop, so counts above one clamp to one. Unlike
+    // passive enumeration, this independent space includes every source,
+    // including moves that gain an effect only through simultaneous actions.
+    const moves = ["i0h", ...Object.entries(FORCED_WIN).flatMap(([name, node]) =>
+      node.neighbors.map((neighbor) => `${name}1${neighbor}`)
+    )];
+    for (const first of moves) {
+      for (const second of moves) {
+        for (const third of moves) {
+          expect(outcome(FORCED_WIN, 1, result.plan as Plan, [first, second, third])).toBe(1);
+        }
+      }
+    }
+  });
+
   it("finds a win, and the plan it returns really does beat every reply", () => {
     const result = findForcedWin(FORCED_WIN, 1);
     expect(result.plan).not.toBeNull();
@@ -111,6 +130,21 @@ describe("findForcedWin", () => {
 });
 
 describe("findRefutation", () => {
+  it("checks replies whose later moves are enabled by an evacuated square", () => {
+    const state = pos({ a: [1, 1], d: [1, 1], g: [2, 2], i: [2, 1] });
+    const plan: Plan = ["d1e", "e1f", "f1c"];
+    const reply: Plan = ["g2d", "d2a", "i0h"];
+    // Against passes, g2d leaves only one troop at d, so the old enumeration
+    // omitted d2a. Against this plan, both troops survive and take the home.
+    expect(enumeratePlans(state, 2, legalMoves)).not.toContainEqual(reply);
+    expect(outcome(state, 1, plan, reply)).toBe(2);
+    const result = findRefutation(state, 1, plan);
+    expect(result.proven).toBe(true);
+    expect(result.refutation).not.toBeNull();
+    expect(outcome(state, 1, plan, result.refutation as Plan)).toBe(2);
+    expect(filterRefutedPlans(state, 1, [plan]).safe).toEqual([]);
+  });
+
   it("finds the reply that punishes a losing plan", () => {
     // Team 1 has two troops on its home and nothing else; walking them out
     // hands over the home and the game.
@@ -193,8 +227,8 @@ describe("filterRefutedPlans", () => {
     );
   });
 
-  it("costs far less than checking each plan on its own", () => {
-    // Replies are enumerated once for the whole batch rather than per plan.
+  it("uses the same simulation budget as checking each plan separately", () => {
+    // Each candidate is checked against its own response-dependent replies.
     const plans = sample();
     const separately = plans.reduce(
       (total, plan) => total + findRefutation(state, 1, plan).simulations,

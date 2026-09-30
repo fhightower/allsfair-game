@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Move, startingBoardState, type BoardState } from "../src/engine";
 import { resolveRound, type Plan } from "../src/bot/simulate";
 import { enumeratePlans, legalMoves } from "../src/bot/plans";
 import { filterRefutedPlans, findRefutation } from "../src/bot/exact";
 import { seededRng } from "../src/bot/rng";
 import { searchBestPlan } from "../src/bot/search";
+import * as nash from "../src/bot/nash";
 
 function pos(spec: Record<string, [number, number]>): BoardState {
   const state = startingBoardState();
@@ -24,6 +25,31 @@ const FORCED_WIN = pos({ a: [1, 0], f: [1, 5], i: [2, 1] });
 const MUST_DEFEND = pos({ a: [1, 3], b: [1, 2], e: [1, 2], d: [2, 5], i: [2, 2] });
 
 describe("searchBestPlan", () => {
+  it("adds both sides' best responses from the same equilibrium", () => {
+    const solver = vi.spyOn(nash, "solveMatrix");
+    try {
+      searchBestPlan(startingBoardState(), 2, {
+        useExactLayer: false,
+        candidateLimit: 12,
+        oracleRounds: 1,
+        oraclePoolLimit: 120,
+        rootSolverIterations: 100,
+        maxSimulations: 100_000,
+        rng: seededRng(1),
+      });
+      expect(solver).toHaveBeenCalledTimes(2);
+      const initial = solver.mock.calls[0][0];
+      const expanded = solver.mock.calls[1][0];
+      // Both players can improve at the opening. Previously the new row had
+      // no corresponding probability, making every opponent payoff NaN and
+      // suppressing the opponent's new column.
+      expect(expanded.length).toBeGreaterThan(initial.length);
+      expect(expanded[0].length).toBeGreaterThan(initial[0].length);
+    } finally {
+      solver.mockRestore();
+    }
+  });
+
   it("takes a forced win and says that is what it found", () => {
     const result = searchBestPlan(FORCED_WIN, 1, { rng: seededRng(1) });
     expect(result.forcedWin).toBe(true);

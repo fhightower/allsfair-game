@@ -9,7 +9,7 @@ import {
   writeGame,
   writeMove,
 } from "../src/db";
-import { Move } from "../src/engine";
+import { Board, Move } from "../src/engine";
 import { createTestDb } from "./d1-shim";
 
 const game = { gameGuid: "g-1", player1Secret: "s1", player2Secret: "" };
@@ -43,6 +43,46 @@ describe("games", () => {
 });
 
 describe("moves and round state", () => {
+  it.each([[3, 1], [3, 2], [1, 3], [2, 3], [2, 2]])(
+    "hides the board and history of a partial round at counts %i/%i",
+    async (p1Count, p2Count) => {
+      for (const move of ["a3b", "b3e", "e3f"].slice(0, p1Count)) {
+        await writeMove(db, "g-1", new Move(move), 1);
+      }
+      for (const move of ["i3h", "h3e", "e3d"].slice(0, p2Count)) {
+        await writeMove(db, "g-1", new Move(move), 2);
+      }
+      const rs = await getBoardAndRoundState(db, "g-1");
+      expect(rs.board.toHtmlTable()).toBe(new Board().toHtmlTable());
+      expect(rs.board.history).toEqual([]);
+      expect(rs.p1Count).toBe(p1Count);
+      expect(rs.p2Count).toBe(p2Count);
+      expect(rs.completedRounds).toBe(0);
+      expect(rs.roundComplete).toBe(false);
+    }
+  );
+
+  it.each([1, 2])("keeps only the previous round visible with %i paired moves pending", async (pending) => {
+    for (const move of ["a1b", "a1d", "b1e"]) {
+      await writeMove(db, "g-1", new Move(move), 1);
+    }
+    for (const move of ["i1h", "i1f", "h1e"]) {
+      await writeMove(db, "g-1", new Move(move), 2);
+    }
+    const completed = await getBoardAndRoundState(db, "g-1");
+    for (const move of ["a4b", "b4e", "e4f"]) {
+      await writeMove(db, "g-1", new Move(move), 1);
+    }
+    for (const move of ["i4h", "h4e", "e4d"].slice(0, pending)) {
+      await writeMove(db, "g-1", new Move(move), 2);
+    }
+    const partial = await getBoardAndRoundState(db, "g-1");
+    expect(partial.board.toHtmlTable()).toBe(completed.board.toHtmlTable());
+    expect(partial.board.history).toHaveLength(3);
+    expect(partial.completedRounds).toBe(1);
+    expect(partial.roundComplete).toBe(false);
+  });
+
   it("returns moves in insertion order", async () => {
     await writeMove(db, "g-1", new Move("a1b"), 1);
     await writeMove(db, "g-1", new Move("i1h"), 2);
@@ -68,6 +108,7 @@ describe("moves and round state", () => {
     expect(rs.board.state.e.troopCount).toBe(0);
     expect(rs.board.state.a.troopCount).toBe(4);
     expect(rs.board.state.i.troopCount).toBe(4);
+    expect(rs.board.history).toHaveLength(3);
   });
 
   it("saveMove writes then returns fresh state", async () => {

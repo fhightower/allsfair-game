@@ -115,7 +115,8 @@ export async function getBoardAndRoundState(
     (m.player === 1 ? p1Moves : p2Moves).push(new Move(m.moveString));
   }
 
-  const pairCount = Math.min(p1Moves.length, p2Moves.length);
+  // Reveal all three moves together, after both players commit a full round.
+  const pairCount = 3 * Math.floor(Math.min(p1Moves.length, p2Moves.length) / 3);
   for (let i = 0; i < pairCount; i++) {
     board.applyMovePair(new MovePair(p1Moves[i], p2Moves[i]));
     if ((i + 1) % 3 === 0) board.restock();

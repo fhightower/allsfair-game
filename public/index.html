@@ -901,6 +901,8 @@
                 showWaiting();
                 startPolling(targetCompletedRounds);
             } catch (e) {
+                document.getElementById('move-form').style.display = 'block';
+                document.getElementById('waiting-msg').style.display = 'none';
                 errEl.textContent = e.message;
                 btn.disabled = false;
                 btn.textContent = 'Submit Moves';

@@ -321,14 +321,9 @@ export function searchBestPlan(
       solution.colStrategy,
       ctx
     );
-    if (mine && mine.value > solution.value + 1e-6) {
-      const key = mine.plan.join(",");
-      if (!mySupport.some((p) => p.join(",") === key)) {
-        mySupport = [...mySupport, mine.plan];
-        grew = true;
-      }
-    }
 
+    // Compute both responses before expanding either support so the plans and
+    // probabilities still describe the same equilibrium.
     // The opponent's best response is the plan that minimises our payoff, which
     // is their best response in their own (negated) game.
     const theirs = bestResponse(
@@ -339,6 +334,14 @@ export function searchBestPlan(
       solution.rowStrategy,
       ctx
     );
+    if (mine && mine.value > solution.value + 1e-6) {
+      const key = mine.plan.join(",");
+      if (!mySupport.some((p) => p.join(",") === key)) {
+        mySupport = [...mySupport, mine.plan];
+        grew = true;
+      }
+    }
+
     if (theirs && -theirs.value < solution.value - 1e-6) {
       const key = theirs.plan.join(",");
       if (!theirSupport.some((p) => p.join(",") === key)) {
