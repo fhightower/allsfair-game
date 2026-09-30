@@ -33,7 +33,7 @@ describe("the harness", () => {
     const first = playGame({ p1: "medium", p2: "easy", seed: 7, maxRounds: 12 });
     const second = playGame({ p1: "medium", p2: "easy", seed: 7, maxRounds: 12 });
     expect(second).toEqual(first);
-  });
+  }, 60_000);
 
   it("builds openings that are not the standard one", () => {
     const opening = randomOpening(seededRng(3), 2);

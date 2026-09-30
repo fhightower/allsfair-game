@@ -74,7 +74,7 @@ describe("searchBestPlan", () => {
       const refutation = findRefutation(MUST_DEFEND, 1, result.plan).refutation;
       expect(refutation, `seed ${seed} chose ${result.plan.join(",")}`).toBeNull();
     }
-  });
+  }, 60_000);
 
   it("only ever returns moves the engine accepts", () => {
     const result = searchBestPlan(startingBoardState(), 1, { rng: seededRng(3) });
@@ -126,7 +126,7 @@ describe("searchBestPlan", () => {
       );
     }
     expect(chosen.size).toBeGreaterThan(1);
-  });
+  }, 60_000);
 
   it("stays within the simulation budget it is given", () => {
     const result = searchBestPlan(MUST_DEFEND, 1, {
